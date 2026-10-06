@@ -70,3 +70,8 @@ MIN_DAYS_FOR_RESULTS = 21
 # US federal holidays in the collection window (no extra dependency for a short list).
 HOLIDAYS = ["2026-10-12", "2026-11-11", "2026-11-26", "2026-12-25", "2027-01-01"]
 MODEL_NAME = f"{CATALOG}.ml.delay_model"
+
+# Live scoring: a trip counts as active if its latest observed stop is this recent.
+LIVE_MAX_ANCHOR_AGE_S = 30 * 60
+LIVE_VEHICLE_MAX_AGE_S = 15 * 60
+MONITORING_DAYS = 30

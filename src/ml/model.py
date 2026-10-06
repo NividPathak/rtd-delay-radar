@@ -48,8 +48,14 @@ def prepare(df: DataFrame) -> DataFrame:
                 "direction_id": -1,
             }
         )
-        .withColumn(RESIDUAL, F.col("target_delay_s") - F.col("current_delay_s"))
-    )
+    ).transform(with_residual)
+
+
+def with_residual(df: DataFrame) -> DataFrame:
+    """Training target: change in delay. Live scoring rows have no label, so no residual."""
+    if "target_delay_s" not in df.columns:
+        return df
+    return df.withColumn(RESIDUAL, F.col("target_delay_s") - F.col("current_delay_s"))
 
 
 def feature_stages(one_hot: bool) -> list:

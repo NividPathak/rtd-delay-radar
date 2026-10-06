@@ -10,6 +10,7 @@ from pyspark.sql import Column, DataFrame, Window
 from pyspark.sql import functions as F
 
 from src.common import config
+from src.pipelines.silver_transforms import service_day_start_epoch
 
 TRIP_KEY = ["service_date", "trip_id"]
 # One example = one anchor stop on one trip at one horizon.
@@ -37,9 +38,9 @@ def with_delay_trend(obs: DataFrame, n_stops: int = config.TREND_STOPS) -> DataF
     )
 
 
-def anchor_target_pairs(obs: DataFrame, horizons: list[int] = config.HORIZONS) -> DataFrame:
-    """Pair each anchor stop with the observed stop K scheduled stops later on the same trip."""
-    anchors = obs.select(
+def anchors(obs: DataFrame, horizons: list[int] = config.HORIZONS) -> DataFrame:
+    """Each observed stop as an anchor, once per horizon, with the target's stop sequence."""
+    return obs.select(
         *TRIP_KEY,
         "route_id",
         "route_short_name",
@@ -52,6 +53,18 @@ def anchor_target_pairs(obs: DataFrame, horizons: list[int] = config.HORIZONS) -
         F.col("known_ts").alias("prediction_ts"),
         F.explode(F.array(*[F.lit(h) for h in horizons])).alias("horizon"),
     ).withColumn("target_stop_sequence", F.col("anchor_stop_sequence") + F.col("horizon"))
+
+
+def with_scheduled_gap(examples: DataFrame) -> DataFrame:
+    """Scheduled seconds between the anchor and the target stop."""
+    return examples.withColumn(
+        "scheduled_gap_s",
+        F.unix_timestamp("target_scheduled_ts") - F.unix_timestamp("anchor_scheduled_ts"),
+    )
+
+
+def observed_targets(anchor_rows: DataFrame, obs: DataFrame) -> DataFrame:
+    """Training: attach the observed arrival at the target stop, if it is after t0."""
     targets = obs.select(
         *TRIP_KEY,
         F.col("stop_sequence").alias("target_stop_sequence"),
@@ -60,14 +73,30 @@ def anchor_target_pairs(obs: DataFrame, horizons: list[int] = config.HORIZONS) -
         F.col("actual_arrival_ts").alias("target_actual_ts"),
         F.col("delay_s").alias("target_delay_s"),
     )
-    return (
-        anchors.join(targets, [*TRIP_KEY, "target_stop_sequence"])
-        .filter(F.col("target_actual_ts") > F.col("prediction_ts"))  # target still in the future
-        .withColumn(
-            "scheduled_gap_s",
-            F.unix_timestamp("target_scheduled_ts") - F.unix_timestamp("anchor_scheduled_ts"),
-        )
+    joined = anchor_rows.join(targets, [*TRIP_KEY, "target_stop_sequence"])
+    return with_scheduled_gap(joined.filter(F.col("target_actual_ts") > F.col("prediction_ts")))
+
+
+def scheduled_targets(anchor_rows: DataFrame, scheduled_stops: DataFrame) -> DataFrame:
+    """Live scoring: the target has not happened yet, so take it from the static schedule."""
+    targets = scheduled_stops.select(
+        "trip_id",
+        F.col("stop_sequence").alias("target_stop_sequence"),
+        F.col("scheduled_stop_id").alias("target_stop_id"),
+        "scheduled_arrival_secs",
     )
+    joined = anchor_rows.join(targets, ["trip_id", "target_stop_sequence"])
+    day_start = service_day_start_epoch(F.col("service_date"))
+    return with_scheduled_gap(
+        joined.withColumn(
+            "target_scheduled_ts", F.timestamp_seconds(day_start + F.col("scheduled_arrival_secs"))
+        ).drop("scheduled_arrival_secs")
+    )
+
+
+def anchor_target_pairs(obs: DataFrame, horizons: list[int] = config.HORIZONS) -> DataFrame:
+    """Pair each anchor stop with the observed stop K scheduled stops later on the same trip."""
+    return observed_targets(anchors(obs, horizons), obs)
 
 
 def local(ts: str) -> Column:
@@ -213,13 +242,15 @@ def with_rtd_prediction(examples: DataFrame, stop_updates: DataFrame) -> DataFra
     return examples.join(latest, EXAMPLE_KEY, "left")
 
 
-def build_training_set(
-    arrivals: DataFrame, stop_updates: DataFrame, scheduled_stops: DataFrame, alerts: DataFrame
+def add_features(
+    examples: DataFrame,
+    obs: DataFrame,
+    stop_updates: DataFrame,
+    scheduled_stops: DataFrame,
+    alerts: DataFrame,
 ) -> DataFrame:
-    """All steps together. Inputs are gold.stop_arrivals, silver.stop_time_updates,
-    silver.gtfs_scheduled_stops, and silver.alerts."""
-    obs = with_delay_trend(observed(arrivals))
-    examples = with_time_features(anchor_target_pairs(obs))
+    """Every feature and both baselines. Shared by training and live scoring."""
+    examples = with_time_features(examples)
     examples = with_stops_remaining(examples, scheduled_stops)
     examples = with_historical_delay(examples, obs)
     examples = with_vehicle_ahead(examples, obs)
@@ -228,3 +259,35 @@ def build_training_set(
     return examples.withColumn("persistence_pred_s", F.col("current_delay_s")).withColumn(
         "processed_ts", F.current_timestamp()
     )
+
+
+def build_training_set(
+    arrivals: DataFrame, stop_updates: DataFrame, scheduled_stops: DataFrame, alerts: DataFrame
+) -> DataFrame:
+    """Training examples with observed labels. Inputs are gold.stop_arrivals,
+    silver.stop_time_updates, silver.gtfs_scheduled_stops, and silver.alerts."""
+    obs = with_delay_trend(observed(arrivals))
+    examples = anchor_target_pairs(obs)
+    return add_features(examples, obs, stop_updates, scheduled_stops, alerts)
+
+
+def latest_anchor_per_trip(obs: DataFrame, now_ts: Column, max_age_s: int) -> DataFrame:
+    """For live scoring: each trip's most recent observed stop, if it is recent enough."""
+    latest = Window.partitionBy(*TRIP_KEY).orderBy(F.desc("stop_sequence"))
+    recent = obs.filter(F.unix_timestamp(now_ts) - F.unix_timestamp("known_ts") <= max_age_s)
+    return recent.withColumn("_rank", F.row_number().over(latest)).filter("_rank = 1").drop("_rank")
+
+
+def build_live_examples(
+    arrivals: DataFrame,
+    stop_updates: DataFrame,
+    scheduled_stops: DataFrame,
+    alerts: DataFrame,
+    now_ts: Column,
+    max_age_s: int = config.LIVE_MAX_ANCHOR_AGE_S,
+) -> DataFrame:
+    """Live examples: active trips' latest stop as anchor, scheduled targets, no labels."""
+    obs = with_delay_trend(observed(arrivals))
+    live_anchors = anchors(latest_anchor_per_trip(obs, now_ts, max_age_s))
+    examples = scheduled_targets(live_anchors, scheduled_stops)
+    return add_features(examples, obs, stop_updates, scheduled_stops, alerts)
