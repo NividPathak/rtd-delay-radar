@@ -147,3 +147,9 @@ Each entry: the options, the choice, the reason.
 - **Reason:** A trip-stop's label changes until the vehicle passes the stop, so gold has to be recomputed from silver, not appended once. A materialized view handles that, and Databricks refreshes it incrementally when it can. Keeping it in the same pipeline makes the silver-to-gold dependency explicit and refreshes both in one update.
 - **Cost watch:** Silver grows by about 15 million rows a day. If the gold refresh gets slow or expensive as history grows, limit the recompute to recent service dates and freeze older ones.
 - **Pipeline name:** The display name is now `rtd_silver_gold`. The bundle resource key stays `rtd_silver`, because changing the key would delete and recreate the pipeline and its tables.
+
+## 2026-10-06: Free Edition limit on running serverless compute at the same time
+
+- **What happened:** The prod pipeline update failed at startup with `RESOURCE_EXHAUSTED: You've hit the limit for serverless compute for free usage. Stop or delete existing serverless compute to free up capacity.` At that moment the SQL warehouse (used for label checks) was still running, and a dev pipeline update had just finished. Nothing was retried, per the quota rule.
+- **Reading:** Free Edition caps how much serverless compute can run at once, separate from the daily quota. Running a dev pipeline, a prod job, and the SQL warehouse close together hits it.
+- **Rules from now on:** Run one Databricks workload at a time. Stop the SQL warehouse right after ad hoc queries (`databricks warehouses stop`). Never start dev runs while a prod run is in progress. If the scheduled job keeps hitting this limit, move it from every 2 hours to every 3 hours and record that here.
