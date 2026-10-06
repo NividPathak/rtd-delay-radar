@@ -13,11 +13,9 @@ import argparse
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import ArrayType
 
-from src.bronze.parse import parse_snapshot
+from src.bronze.decode import decode_entities, to_bronze_records
 from src.common import config
-from src.common.schemas import RECORD_SCHEMAS
 
 
 def parse_binary_files(files: DataFrame, feed_name: str) -> DataFrame:
@@ -25,16 +23,8 @@ def parse_binary_files(files: DataFrame, feed_name: str) -> DataFrame:
 
     Adds `source_file` (where the row came from) and `ingest_ts` (when bronze saw it).
     """
-    record_schema = RECORD_SCHEMAS[feed_name]
-    parse_udf = F.udf(
-        lambda content: parse_snapshot(feed_name, bytes(content)), ArrayType(record_schema)
-    )
-    return (
-        files.select(F.col("path").alias("source_file"), parse_udf("content").alias("records"))
-        .select("source_file", F.explode("records").alias("record"))
-        .select("record.*", "source_file")
-        .withColumn("ingest_ts", F.current_timestamp())
-    )
+    entities = decode_entities(files, feed_name)
+    return to_bronze_records(entities, feed_name).withColumn("ingest_ts", F.current_timestamp())
 
 
 def source_path(feed_name: str, date: str | None) -> str:

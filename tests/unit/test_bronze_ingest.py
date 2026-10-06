@@ -36,3 +36,17 @@ def test_alerts_nested_arrays(spark) -> None:
 def test_source_path_with_and_without_date() -> None:
     assert source_path("alerts", None).endswith("/raw/feed=alerts/")
     assert source_path("alerts", "2026-10-06").endswith("/raw/feed=alerts/date=2026-10-06/")
+
+
+def test_spark_decode_matches_python_reference_parser(spark) -> None:
+    from src.bronze.parse import parse_snapshot
+
+    for feed in ["trip_updates", "vehicle_positions", "alerts"]:
+        spark_rows = parse_binary_files(binary_files(spark, feed), feed).drop(
+            "source_file", "ingest_ts"
+        )
+        actual = [r.asDict(recursive=True) for r in spark_rows.collect()]
+        expected = parse_snapshot(feed, (FIXTURES / f"{feed}.pb").read_bytes())
+        assert len(actual) == len(expected), feed
+        for got, want in zip(actual, expected, strict=True):
+            assert got == want, (feed, want["entity_id"])

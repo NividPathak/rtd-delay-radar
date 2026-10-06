@@ -1,7 +1,9 @@
-"""Turn one GTFS-Realtime protobuf snapshot into plain Python records.
+"""Pure-Python reference parser for GTFS-Realtime snapshots.
 
-Each function returns a list of dicts whose keys match the record schemas in
-`src/common/schemas.py`. No Spark here, so the parsing is easy to unit test.
+Production bronze decodes with Spark's `from_protobuf` (src/bronze/decode.py), because a
+Python UDF ran out of memory on daytime snapshots. This module stays as a test oracle:
+tests check that the Spark output matches it field by field on the saved fixtures.
+Each function returns dicts whose keys match the record schemas in src/common/schemas.py.
 A field that is absent in the protobuf becomes None, never a default 0 or "".
 """
 
@@ -18,10 +20,10 @@ def opt(message: Message, field: str) -> Any:
     return getattr(message, field) if message.HasField(field) else None
 
 
-def opt_enum(message: Message, field: str) -> str | None:
-    """Return an enum field's name (e.g. "SKIPPED") if it is set, otherwise None."""
+def opt_enum(message: Message, field: str, default: str | None = None) -> str | None:
+    """Return an enum field's name (e.g. "SKIPPED") if it is set, otherwise `default`."""
     if not message.HasField(field):
-        return None
+        return default
     enum_type = message.DESCRIPTOR.fields_by_name[field].enum_type
     return enum_type.values_by_number[getattr(message, field)].name
 
@@ -46,7 +48,8 @@ def stop_time_update_record(stu: Message) -> Record:
         "arrival_delay": opt(stu.arrival, "delay") if stu.HasField("arrival") else None,
         "departure_time": opt(stu.departure, "time") if stu.HasField("departure") else None,
         "departure_delay": opt(stu.departure, "delay") if stu.HasField("departure") else None,
-        "schedule_relationship": opt_enum(stu, "schedule_relationship"),
+        # GTFS-RT spec default when unset. Spark's from_protobuf fills it in the same way.
+        "schedule_relationship": opt_enum(stu, "schedule_relationship", "SCHEDULED"),
     }
 
 
@@ -84,7 +87,7 @@ def vehicle_position_record(feed_ts: int, entity: Message) -> Record:
         "longitude": opt(vp.position, "longitude"),
         "bearing": opt(vp.position, "bearing"),
         "speed": opt(vp.position, "speed"),
-        "current_status": opt_enum(vp, "current_status"),
+        "current_status": opt_enum(vp, "current_status", "IN_TRANSIT_TO"),  # spec default
         "current_stop_sequence": opt(vp, "current_stop_sequence"),
         "stop_id": opt(vp, "stop_id"),
         "vehicle_timestamp": opt(vp, "timestamp"),
