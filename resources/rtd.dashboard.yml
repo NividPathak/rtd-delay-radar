@@ -1,0 +1,10 @@
+# AI/BI dashboard. Queries use bare table names; the catalog and schema come from here,
+# so dev reads rtd.dev_gold and prod reads rtd.gold.
+resources:
+  dashboards:
+    rtd_delay_radar:
+      display_name: "RTD Delay Radar"
+      file_path: ../src/dashboards/rtd_delay_radar.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.catalog}
+      dataset_schema: ${var.schema_prefix}gold
