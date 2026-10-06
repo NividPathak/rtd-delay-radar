@@ -2,6 +2,12 @@
 
 ## Current milestone
 
+M5, scoring and dashboard (branch `m5-scoring`, stacked on `m4-model`). Deployed to prod. "Done when" (dashboard updates on its own after a scheduled run) is waiting for the next scheduled prod run, plus a visual check of the dashboard in the workspace.
+
+- Prod dashboard: https://dbc-5b0fa231-e20d.cloud.databricks.com/dashboardsv3/01f1c1d682841d109d9a2ea5d7029325/published?w=7474646683731620
+
+Previous:
+
 M4, features and model (branch `m4-model`, stacked on `m3-gold`). Code complete and pipeline-tested in dev. **No results until the full retrain.** "Done when" (results table on a held-out week vs both baselines) needs 3 weeks of data.
 
 Previous:
@@ -49,6 +55,18 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 - [x] Unit tests (25 total).
 - [ ] 48 hours of continuous data with no gaps over 5 minutes (earliest 2026-10-08 09:00 UTC).
 - [x] `docs/architecture.md` and `docs/interview_prep.md` M1 entries.
+
+## M5 checklist
+
+- [x] `rtd-score` task after silver/gold in `rtd_refresh`: predictions for active trips (persistence, RTD, champion model when it exists).
+- [x] `gold.prediction_monitoring`: daily MAE/RMSE per predictor, mode, horizon against observed arrivals.
+- [x] `gold.live_vehicles` for the map.
+- [x] AI/BI dashboard in the bundle: live delay map, worst routes now, prediction vs actual, error over time, error by horizon.
+- [x] Dev: score task succeeded (baselines only, no champion). All 6 dashboard queries succeed on dev gold.
+- [x] Prod deployed (rtd_refresh now has bronze, silver, score).
+- [ ] Visual check of the dashboard (needs the user signed in to the workspace in the browser).
+- [ ] Confirm a scheduled prod run refreshes the dashboard tables on its own.
+- [ ] Model predictions on the dashboard (after the champion exists, 2026-10-27 earliest).
 
 ## M4 checklist
 
@@ -132,3 +150,7 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 - Found: `alert_active` was 1 for 83% of examples because of stop-level construction alerts. Narrowed to route-wide alerts.
 - Corrected: the evening `RESOURCE_EXHAUSTED` was my manual run colliding with the first scheduled prod run, which succeeded and built prod gold.
 - Next: daily pipeline tests as days accumulate (first model training possible once there are 2+ service dates); GitHub secrets for the backup collector; full retrain on 2026-10-27.
+
+### 2026-10-06 (late night): M5
+- Done: live scoring with shared feature code, monitoring, live vehicles, dashboard JSON and bundle resource, M5 docs. Dev score run succeeded; prod deployed.
+- Next: check the dashboard visually; confirm the next scheduled prod run updates it; GitHub secrets for the backup collector (still open).
