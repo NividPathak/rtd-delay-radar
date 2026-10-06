@@ -21,6 +21,7 @@ HTTP_TIMEOUT_SECONDS = 20
 MAX_RETRIES = 3
 BACKOFF_BASE_SECONDS = 2.0
 LOCAL_RAW_DIR = "data/raw"
+USER_AGENT = "rtd-delay-radar/0.1 (+https://github.com/NividPathak/rtd-delay-radar)"
 
 # Static GTFS schedule. RTD changes schedules about three times a year.
 STATIC_GTFS_URL = "https://www.rtd-denver.com/files/gtfs/google_transit.zip"
