@@ -1,7 +1,13 @@
 import os
+import time
 from pathlib import Path
 
 import pytest
+
+# PySpark converts naive Python datetimes using the process time zone. Pin it to UTC so
+# test inputs mean the same thing on a laptop in Denver and on a CI runner.
+os.environ["TZ"] = "UTC"
+time.tzset()
 
 HOMEBREW_JAVA_17 = Path("/opt/homebrew/opt/openjdk@17")
 
