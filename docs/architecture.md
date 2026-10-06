@@ -146,3 +146,37 @@ rtd.gold.route_delay_hourly    avg and median delay, share more than 5 minutes l
 - **Why not use vehicle positions for labels.** Most vehicles in the feed do not carry a trip id, so matching positions to stops would label few arrivals. The last-prediction method labels almost every stop when collection is continuous.
 - **Why a materialized view.** A label keeps changing until the vehicle passes the stop, so gold must be recomputed rather than appended to. A materialized view recomputes from silver on each pipeline update, incrementally when it can.
 - **Why `route_delay_hourly` uses local time.** Riders and the dashboard think in Denver time ("5 pm on weekdays"), so the hour is taken from the scheduled arrival converted to America/Denver.
+
+## M4. Features and model
+
+### What exists now
+
+```
+gold.stop_arrivals + silver.stop_time_updates + silver.gtfs_scheduled_stops + silver.alerts
+      |  rtd_train job, task 1: rtd-build-features --start --end
+      v
+gold.training_set      one row per (anchor stop, horizon): features at t0, label, baselines
+      |  rtd_train job, task 2: rtd-train --start --end
+      v
+time split by service date -> baselines -> linear, GBT (depth 4, 6) -> MLflow
+      |
+      +--> gold.model_results     MAE and RMSE per predictor, mode, horizon, with data_status
+      +--> gold.test_predictions  best model's held-out predictions (for error analysis)
+      +--> rtd.ml.delay_model     Unity Catalog model (champion alias only for full-data runs)
+```
+
+The job is not scheduled. A full retrain is one command with a date range.
+
+### How an example is built
+
+1. **Anchor:** a vehicle has just reached stop A. The prediction time `t0` is when that arrival became known.
+2. **Target:** the same trip's observed delay K scheduled stops later, for K in 1, 5, 10, 20, as long as that arrival is after `t0`.
+3. **Features** use only what was known at `t0`: current delay, the trend over the last 3 stops, route and direction, how many stops are left, time of day and day type, the average delay at the target stop and hour over the previous 7 days, the delay of the last vehicle on the same route that already reached the target stop, and whether a route-wide alert was live.
+4. **Baselines:** persistence (delay stays the same) and RTD's own prediction for the target stop from the latest snapshot before `t0`.
+
+### Why it is built this way
+
+- **Why the split is by time.** Delays on one day are correlated: a snowstorm or a crash affects every trip that day. A random split would put trips from the same day in both train and test, and the model would look good by memorising the day. Splitting by service date means the model is always tested on days it has never seen, like in real use.
+- **Why predict the change, not the delay.** Persistence is a strong baseline. Predicting the change in delay means a model that learns nothing ends up equal to persistence, not worse. Every gain is a gain over the baseline.
+- **Why as-of joins.** Features like "the vehicle ahead" and "RTD's prediction" must be the latest value *before* `t0`. A plain join would pick up values from after `t0` and leak the future. The as-of joins and their tests are what keep the evaluation honest.
+- **Why nothing is reported yet.** Any model trained on less than 3 weeks is a pipeline test. The code marks those runs preliminary and refuses to give them the `champion` alias.
