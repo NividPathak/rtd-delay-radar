@@ -180,3 +180,31 @@ The job is not scheduled. A full retrain is one command with a date range.
 - **Why predict the change, not the delay.** Persistence is a strong baseline. Predicting the change in delay means a model that learns nothing ends up equal to persistence, not worse. Every gain is a gain over the baseline.
 - **Why as-of joins.** Features like "the vehicle ahead" and "RTD's prediction" must be the latest value *before* `t0`. A plain join would pick up values from after `t0` and leak the future. The as-of joins and their tests are what keep the evaluation honest.
 - **Why nothing is reported yet.** Any model trained on less than 3 weeks is a pipeline test. The code marks those runs preliminary and refuses to give them the `champion` alias.
+
+## M5. Scoring and dashboard
+
+### What exists now
+
+```
+rtd_refresh (every 2 h):  bronze -> silver and gold pipeline -> score
+                                                                  |
+          +-------------------------------+-----------------------+
+          v                               v                       v
+gold.delay_predictions         gold.prediction_monitoring   gold.live_vehicles
+(append: every active trip,    (daily MAE/RMSE per          (latest position and
+ 1/5/10/20 stops ahead,         predictor once arrivals      delay per vehicle)
+ persistence, RTD, model*)      are observed)
+          \______________________________|_______________________/
+                                         v
+                       AI/BI dashboard "RTD Delay Radar"
+     live delay map | worst routes now | prediction vs actual | error over time
+```
+
+\* The model's predictions appear once `rtd.ml.delay_model@champion` exists (after the full retrain).
+
+### Why it is built this way
+
+- **Scoring right after the pipeline.** The freshest data exists right after silver and gold update, so scoring is the last task of the same job. No separate schedule is needed, and the quota cost stays in one run.
+- **Same feature code for training and scoring.** `src/features/training_set.py` builds features for both. The only difference is where the target comes from: an observed arrival for training, the static schedule for live scoring. Sharing the code means the model sees features computed the same way in both places (no training/serving skew).
+- **Baselines are scored too.** Monitoring compares the model with persistence and RTD on the same predictions every day. That is the honest way to show whether the model keeps its advantage after deployment.
+- **The dashboard updates by itself.** Its queries read gold tables, which every scheduled run refreshes. Opening the dashboard runs those queries on the SQL warehouse.
