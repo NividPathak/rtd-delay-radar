@@ -99,7 +99,9 @@ RECORD_SCHEMAS: dict[str, StructType] = {
     "alerts": ALERT_RECORD,
 }
 
-# ---- Static GTFS files (all read as strings, then cast in silver) ----
+# ---- Static GTFS files ----
+# Read with header=true and no inference, so every column is a string. Spark maps a
+# CSV schema by position, not name, so we select these columns by name instead.
 
 STATIC_COLUMNS: dict[str, list[str]] = {
     "feed_info": ["feed_publisher_name", "feed_start_date", "feed_end_date", "feed_version"],
@@ -121,8 +123,3 @@ STATIC_COLUMNS: dict[str, list[str]] = {
     ],
     "calendar_dates": ["service_id", "date", "exception_type"],
 }
-
-
-def static_schema(file: str) -> StructType:
-    """String schema for one static GTFS file, using only the columns we keep."""
-    return StructType([StructField(c, StringType()) for c in STATIC_COLUMNS[file]])

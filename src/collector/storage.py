@@ -7,10 +7,7 @@ from pathlib import Path
 def snapshot_relative_path(feed_name: str, header_ts: int) -> str:
     """Return `feed=<name>/date=YYYY-MM-DD/hour=HH/<name>_<ts>.pb`, partitioned in UTC."""
     moment = datetime.fromtimestamp(header_ts, tz=UTC)
-    return (
-        f"feed={feed_name}/date={moment:%Y-%m-%d}/hour={moment:%H}/"
-        f"{feed_name}_{header_ts}.pb"
-    )
+    return f"feed={feed_name}/date={moment:%Y-%m-%d}/hour={moment:%H}/{feed_name}_{header_ts}.pb"
 
 
 def save_local(root: Path, relative_path: str, body: bytes) -> Path:
