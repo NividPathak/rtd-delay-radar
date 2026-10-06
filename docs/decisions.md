@@ -193,3 +193,9 @@ Each feature must be computable at `t0` from data that existed at `t0`. Unit tes
 - `src/ml/evaluate.py` marks a run preliminary when there are fewer than 21 days of data or the held-out window is shorter than 7 days. Preliminary runs are tagged `data_status=preliminary` in MLflow, the model version gets the same tag, and it never gets the `champion` alias.
 - With a single service date there are no training days at all. The job then logs the baselines and skips the models instead of training on nothing.
 - Earliest full retrain: **2026-10-27** (collector start 2026-10-06 plus 21 days), and only if collection gaps are small by then.
+
+## 2026-10-06: `alert_active` counts only route-wide alerts
+
+- **Found in the first training set (dev, one day):** `alert_active` was 1 for about 83% of examples. RTD keeps more than 100 long-running alerts, most of them single-stop closures for construction, so nearly every route always "had an alert". A flag that is almost always on carries little signal.
+- **Choice:** Count only alerts whose informed entity names the route but no specific stop (route-wide: detours, reduced service). A stop-level feature at the target stop could be added later if error analysis shows alerts matter.
+- **Other coverage on the same day:** RTD prediction available for 100% of examples, vehicle ahead about 92%, delay trend about 89%, 7-day history 0% (it needs earlier days).
