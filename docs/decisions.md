@@ -131,3 +131,19 @@ Each entry: the options, the choice, the reason.
 
 - **Options:** Every hour or every 2 hours (the plan allows 1 to 2).
 - **Choice:** Every 2 hours in prod, until one run's quota cost is measured. The dev target's schedule is paused by development mode.
+
+## 2026-10-06: How an "actual arrival" is defined
+
+- **Problem:** RTD publishes predictions, not observed arrival times. The plan offers two label sources: the last TripUpdate before arrival, or a vehicle position crossing the stop.
+- **Options:** (a) The last prediction for the stop before RTD drops it from the feed (RTD removes a stop once the vehicle passes it). (b) Match vehicle positions to stop coordinates and detect when the vehicle passes.
+- **Choice:** (a), with a reliability rule. `label_lead_s` = observed arrival minus the time of that last snapshot. The label counts (`is_observed`) only when the last prediction was made at most 120 seconds before the arrival.
+- **Reason:** Only 7 of 95 vehicles in the first sample carried a trip id, so (b) would label very few stops. A prediction made a minute before arrival is very close to the true time, and the 120-second rule rejects labels where collection stopped early (gaps) or the trip was still running.
+- **Check (dev, 2026-10-06):** 96% to 98% of trip-stops are observed in hours with continuous collection. It drops to 10% to 42% in hours with collection gaps, and to 0% for trips still running at refresh time. So label coverage depends on collector uptime.
+- **Limitation:** The label is still RTD's estimate, made at most 2 minutes out. Comparing the model to "RTD's own prediction" at short horizons has to keep this in mind, because at very short horizons RTD's prediction and the label are nearly the same thing.
+
+## 2026-10-06: Gold tables are materialized views in the same pipeline
+
+- **Choice:** `gold.stop_arrivals` and `gold.route_delay_hourly` are materialized views published from the silver pipeline to the gold schema (`rtd.gold_schema` setting).
+- **Reason:** A trip-stop's label changes until the vehicle passes the stop, so gold has to be recomputed from silver, not appended once. A materialized view handles that, and Databricks refreshes it incrementally when it can. Keeping it in the same pipeline makes the silver-to-gold dependency explicit and refreshes both in one update.
+- **Cost watch:** Silver grows by about 15 million rows a day. If the gold refresh gets slow or expensive as history grows, limit the recompute to recent service dates and freeze older ones.
+- **Pipeline name:** The display name is now `rtd_silver_gold`. The bundle resource key stays `rtd_silver`, because changing the key would delete and recreate the pipeline and its tables.
