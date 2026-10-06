@@ -4,13 +4,18 @@ Wires the tested functions in `src/pipelines/silver_transforms.py` together and 
 data quality expectations. Pipeline settings (see resources/rtd.pipeline.yml):
     rtd.bronze_schema   e.g. rtd.bronze or rtd.dev_bronze
     rtd.static_path     volume folder with version=<feed_version>/<file>.txt
+    rtd.code_root       deployed repo root, added to sys.path so `src` can be imported
 """
+
+import sys
 
 from pyspark import pipelines as dp
 from pyspark.sql import DataFrame
 
-from src.common import config
-from src.pipelines import silver_transforms as T
+sys.path.insert(0, spark.conf.get("rtd.code_root"))  # noqa: F821
+
+from src.common import config  # noqa: E402
+from src.pipelines import silver_transforms as T  # noqa: E402
 
 BRONZE = spark.conf.get("rtd.bronze_schema")  # noqa: F821
 STATIC_PATH = spark.conf.get("rtd.static_path")  # noqa: F821
