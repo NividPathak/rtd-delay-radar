@@ -102,10 +102,39 @@ def main() -> None:
             results.append(results_rows(m, run.info.run_id, info))
             if flat["mae_s.all"] < best_mae:
                 best_name, best_mae, best_model = name, flat["mae_s.all"], (model, run.info.run_id)
+                best_scored = scored.withColumnRenamed(f"{name}_pred_s", "model_pred_s")
     print(f"best model: {best_name} (MAE {best_mae:.1f} s, {tags['data_status']})")
 
     save_results(results, args.schema_prefix)
+    save_test_predictions(best_scored, best_model[1], args.schema_prefix)
     register(mlflow, best_model, train, info)
+
+
+PREDICTION_COLUMNS = [
+    "service_date",
+    "trip_id",
+    "anchor_stop_sequence",
+    "horizon",
+    "route_short_name",
+    "mode",
+    "hour_local",
+    "is_weekend",
+    "current_delay_s",
+    "delay_trend_s",
+    "has_ahead",
+    "alert_active",
+    "target_delay_s",
+    "persistence_pred_s",
+    "rtd_pred_s",
+    "model_pred_s",
+]
+
+
+def save_test_predictions(scored: DataFrame, run_id: str, schema_prefix: str) -> None:
+    """Overwrite gold.test_predictions with the best model's test-week predictions."""
+    table = config.table_name("gold", "test_predictions", schema_prefix)
+    out = scored.select(*PREDICTION_COLUMNS, F.lit(run_id).alias("run_id"))
+    out.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable(table)
 
 
 def save_results(results: list[DataFrame], schema_prefix: str) -> None:
