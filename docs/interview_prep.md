@@ -52,3 +52,20 @@ GTFS gives times like `25:30:00` relative to the service day, not clock times. T
 
 **5. What data quality problem did you find in RTD's feed?**
 For early-morning trips, RTD's trip update `start_date` is one day behind. The static schedule and the vehicle feed both show the trip runs the next day. Left alone, every early-morning delay would be off by 24 hours. Real delays are within hours, so I round the raw delay to whole days to detect the error, correct the date, and keep a column recording the correction. A warn-only expectation reports how often it happens: 0.07% of rows on the first day.
+
+## M3. Gold tables and labels
+
+**1. RTD only publishes predictions. Where do your labels come from?**
+RTD drops a stop from a trip update once the vehicle passes it. The last prediction before that happens is very close to the real arrival, so I use it as the observed arrival. I only trust it if that last prediction was made at most 2 minutes before the arrival time, which I record as `label_lead_s`.
+
+**2. How do you know the labels are good?**
+I measured the share of trusted labels per hour. With continuous collection it is 96% to 98%. During collection gaps it drops to 10% to 42%, which shows the rule correctly rejects labels where data is missing instead of silently using stale predictions.
+
+**3. What is the weakness of this label?**
+It is still RTD's own estimate, just made very close to arrival. At very short horizons, comparing a model to RTD's prediction is almost comparing RTD to itself. That is why results are split by prediction horizon.
+
+**4. Why is gold a materialized view and not a streaming table?**
+A trip-stop's label changes until the vehicle passes the stop. A streaming table appends rows and never revisits them. A materialized view recomputes from silver on each update, so labels are always based on the latest data.
+
+**5. How would you answer "which route is latest at 5 pm on weekdays"?**
+One query on `gold.route_delay_hourly`: filter `is_weekday` and `hour_local = 17`, take the arrival-weighted average delay per route, and require a minimum number of arrivals so a route with three trips does not top the list.
