@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-M0 complete (branch `m0-setup`, PR open). Next: M1, collector hardening and 48 hours of continuous data.
+M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets for the backup runner, then 48 hours of data with no gaps over 5 minutes.
 
 ## Key dates
 
@@ -12,9 +12,23 @@ M0 complete (branch `m0-setup`, PR open). Next: M1, collector hardening and 48 h
 
 ## Collector health (last check)
 
-- 2026-10-06 09:02 UTC: 6 snapshots per feed, 08:57:37 to 09:02:08 UTC, no gaps over 5 minutes, no errors in the log.
-- Runs as a background process: `caffeinate -i .venv/bin/python -m src.collector.run`, log at `data/logs/collector.log`.
-- Check: `uv run python -m src.collector.health`. Stop: `pkill -f src.collector.run`.
+- 2026-10-06 09:19 UTC: continuous since 08:57:37 UTC, no gaps over 5 minutes. Local and volume counts match.
+- Laptop: launchd agent `com.rtd-delay-radar.collector` (auto-restart, `caffeinate -w` keeps the Mac from idle sleep). Log at `data/logs/collector.log`.
+- Check: `uv run python -m src.collector.health --volume --days 3`.
+- Stop: `launchctl bootout gui/$(id -u)/com.rtd-delay-radar.collector`. Start again: `sh ops/install_collector_agent.sh`.
+- Backup: `.github/workflows/collector.yml`, inactive until `DATABRICKS_HOST` and `DATABRICKS_TOKEN` secrets are added.
+
+## M1 checklist
+
+- [x] Polls three feeds every 60 seconds, skips duplicates by header timestamp.
+- [x] Writes raw `.pb` files under `feed=<name>/date=YYYY-MM-DD/hour=HH/` and uploads to the volume.
+- [x] Retries with backoff, logs failures, never crashes on one bad poll.
+- [x] Auto-restart on the laptop (launchd), tested by killing the process.
+- [x] GitHub Actions backup runner (`collector.yml`).
+- [ ] User adds GitHub secrets, backup runner tested with a manual run.
+- [x] Unit tests (25 total).
+- [ ] 48 hours of continuous data with no gaps over 5 minutes (earliest 2026-10-08 09:00 UTC).
+- [x] `docs/architecture.md` and `docs/interview_prep.md` M1 entries.
 
 ## First-time setup checklist
 
@@ -43,7 +57,8 @@ M0 complete (branch `m0-setup`, PR open). Next: M1, collector hardening and 48 h
 - Done: first-time setup, all of M0. The collector was built early and is running.
 - Findings: RTD feed URLs moved to `open-data.rtd-denver.com`. SQL `CREATE CATALOG` was needed on Free Edition because the REST API needs a storage root. Serverless can reach RTD. One transient `Errno 5` reading bundle files on the first job run.
 - Next (M1): GitHub Actions collector as backup runner, auto-restart for the laptop collector (launchd), confirm 48 hours with no gaps over 5 minutes.
+- M1: added `--minutes`, volume health check, freshness check, launchd agent, backup workflow. Found and fixed `caffeinate` not holding a sleep assertion.
 - Open problems:
-  - Laptop collector stops if the lid closes or the Mac restarts. Needs launchd or the GitHub Actions backup soon.
+  - Closing the lid still sleeps the Mac. The backup runner covers it once secrets are added.
   - Java runtime missing for local Spark tests (decide before M2).
   - Watch for the `Errno 5` workspace file read error in M2. Fallback is packaging `src/` as a wheel.
