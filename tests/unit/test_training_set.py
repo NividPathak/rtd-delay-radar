@@ -16,6 +16,7 @@ from src.features.training_set import (
 
 DAY = date(2026, 10, 6)
 T = datetime(2026, 10, 6, 16, 0)  # 10:00 Denver
+ALERT_SCHEMA = "route_id string, stop_id string, first_seen_ts timestamp, last_seen_ts timestamp"
 
 
 def arrival(trip: str, seq: int, delay: int, minute: int, day: date = DAY, **kw) -> Row:
@@ -105,17 +106,26 @@ def test_alert_flag_requires_alert_live_at_t0(spark) -> None:
     t0 = ex.first().prediction_ts
     alerts = spark.createDataFrame(
         [
-            Row(route_id="15", first_seen_ts=t0 - timedelta(hours=1), last_seen_ts=t0),
+            Row(
+                route_id="15", stop_id=None, first_seen_ts=t0 - timedelta(hours=1), last_seen_ts=t0
+            ),
+            Row(
+                route_id="15", stop_id="s9", first_seen_ts=t0 - timedelta(hours=1), last_seen_ts=t0
+            ),
             Row(
                 route_id="15",
+                stop_id=None,
                 first_seen_ts=t0 + timedelta(minutes=1),
                 last_seen_ts=t0 + timedelta(hours=1),
             ),
-        ]
+        ],
+        ALERT_SCHEMA,
     )
     assert with_alert_flag(ex, alerts).first().alert_active == 1
     future_only = alerts.filter(f"first_seen_ts > '{t0}'")
     assert with_alert_flag(ex, future_only).first().alert_active == 0
+    stop_level_only = alerts.filter("stop_id IS NOT NULL")
+    assert with_alert_flag(ex, stop_level_only).first().alert_active == 0
 
 
 def test_rtd_prediction_uses_latest_snapshot_at_or_before_t0(spark) -> None:
@@ -148,7 +158,7 @@ def test_build_training_set_end_to_end(spark) -> None:
     obs_rows = trip_rows("t1", [60, 90, 120, 150, 180, 240])
     arrivals = spark.createDataFrame(obs_rows)
     schedule = spark.createDataFrame([Row(trip_id="t1", stop_sequence=s) for s in range(1, 9)])
-    alerts = spark.createDataFrame([Row(route_id="99", first_seen_ts=T, last_seen_ts=T)])
+    alerts = spark.createDataFrame([("99", None, T, T)], ALERT_SCHEMA)
     updates = spark.createDataFrame(
         [Row(service_date=DAY, trip_id="t1", stop_sequence=6, feed_ts=T, arrival_delay_s=200)]
     )

@@ -171,8 +171,11 @@ def with_vehicle_ahead(examples: DataFrame, obs: DataFrame) -> DataFrame:
 
 
 def with_alert_flag(examples: DataFrame, alerts: DataFrame) -> DataFrame:
-    """1 if any alert naming the route was in the feed at t0, else 0."""
-    a = alerts.select(
+    """1 if a route-wide alert (names the route, not one stop) was in the feed at t0.
+
+    Stop-level alerts (mostly long construction closures of single stops) are left out:
+    they cover most routes most of the time, so they would carry almost no signal."""
+    a = alerts.filter(F.col("stop_id").isNull()).select(
         F.col("route_id").alias("a_route"),
         F.col("first_seen_ts").alias("a_first"),
         F.col("last_seen_ts").alias("a_last"),
