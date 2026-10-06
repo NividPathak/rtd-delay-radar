@@ -1,0 +1,19 @@
+# Silver layer: Lakeflow Declarative Pipeline on serverless compute.
+resources:
+  pipelines:
+    rtd_silver:
+      name: rtd_silver
+      catalog: ${var.catalog}
+      schema: ${var.schema_prefix}silver
+      serverless: true
+      root_path: ../src/pipelines
+      libraries:
+        - glob:
+            include: ../src/pipelines/transformations/**
+      configuration:
+        rtd.bronze_schema: ${var.catalog}.${var.schema_prefix}bronze
+        rtd.static_path: /Volumes/${var.catalog}/landing/raw/static
+      environment:
+        dependencies:
+          # Installs this project (src/ and its dependencies) from the deployed pyproject.toml.
+          - --editable ${workspace.file_path}

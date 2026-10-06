@@ -72,7 +72,7 @@ def main() -> None:
     from databricks.sdk.runtime import spark
 
     for feed_name in config.FEEDS:
-        ingest_feed(spark, feed_name, args.schema_prefix, args.date)
+        ingest_feed(spark, feed_name, args.schema_prefix, args.date or None)
 
 
 if __name__ == "__main__":

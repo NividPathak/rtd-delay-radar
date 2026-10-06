@@ -7,10 +7,21 @@ bundle:
 include:
   - resources/*.yml
 
+artifacts:
+  rtd_wheel:
+    type: whl
+    build: uv build --wheel
+
 variables:
   catalog:
     description: Unity Catalog catalog for all project tables
     default: rtd
+  schema_prefix:
+    description: '"dev_" writes to rtd.dev_bronze/dev_silver/dev_gold; "" writes to prod schemas'
+    default: ""
+  dev_date:
+    description: Only ingest this UTC date (YYYY-MM-DD). Empty means all new files.
+    default: ""
 
 targets:
   dev:
@@ -19,6 +30,9 @@ targets:
     default: true
     workspace:
       host: https://dbc-5b0fa231-e20d.cloud.databricks.com
+    variables:
+      schema_prefix: dev_
+      dev_date: "2026-10-06"
 
   prod:
     mode: production

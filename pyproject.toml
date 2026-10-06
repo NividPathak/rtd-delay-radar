@@ -9,6 +9,9 @@ dependencies = [
     "databricks-sdk>=0.40.0",
 ]
 
+[project.scripts]
+rtd-bronze = "src.bronze.ingest:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",
