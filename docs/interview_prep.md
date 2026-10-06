@@ -86,3 +86,20 @@ So that a model that learns nothing collapses to persistence instead of somethin
 
 **5. You only had one day of data when you built this. What did you do?**
 I built and tested the whole pipeline but did not report any number. The code marks runs with under 21 days or no full held-out week as preliminary, tags them in MLflow, and never gives them the champion alias. The first real results come from the retrain on 2026-10-27.
+
+## M5. Scoring and dashboard
+
+**1. How do you avoid training/serving skew?**
+Training and live scoring call the same feature function. The only difference is the target: in training it is an observed arrival, in scoring it comes from the schedule because the vehicle has not arrived yet. Features like the vehicle ahead or the 7-day history are computed by the same code in both cases.
+
+**2. What does your scoring job do if there is no approved model?**
+It writes predictions from the two baselines and logs that no champion exists. When a model gets the `champion` alias after a full-data retrain, the next run loads it and adds its predictions with the model version. I never promote a model trained on too little data just to fill the dashboard.
+
+**3. How do you monitor the model after deployment?**
+Every prediction is stored. Once the target stop is reached and the label is trusted, the monitoring step joins them and computes daily MAE and RMSE per predictor, mode, and horizon. The dashboard plots model error next to the baselines over time, so drift or a broken feature shows up as the model's line moving toward or above persistence.
+
+**4. How "live" is the dashboard?**
+Up to about 2 hours behind, because the pipeline runs in `availableNow` bursts every 2 hours to stay within the Free Edition quota. The dashboard says so in its header and shows a "data as of" time. With paid compute I would run the same code on a shorter schedule; the code would not change.
+
+**5. Why is the dashboard a JSON file in Git?**
+So it is deployed by the Asset Bundle like everything else, reviewed in pull requests, and identical between dev and prod. The bundle sets which schema the dashboard reads, so one file serves both targets.
