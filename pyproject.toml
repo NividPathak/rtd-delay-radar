@@ -9,17 +9,12 @@ dependencies = [
     "databricks-sdk>=0.40.0",
 ]
 
-[project.optional-dependencies]
-spark = [
-    "pyspark>=3.5,<4.1",
-    "delta-spark>=3.2",
-    "mlflow>=2.15",
-]
-
 [dependency-groups]
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
+    # Local Spark for unit tests only. Serverless compute provides its own Spark.
+    "pyspark>=4.0,<4.1",
 ]
 
 [build-system]
