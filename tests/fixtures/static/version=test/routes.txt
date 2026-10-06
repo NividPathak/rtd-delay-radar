@@ -1,0 +1,15 @@
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type,route_url,route_color,route_text_color
+104L,RTD,104L,Wagon Road / Denver Airport Limited,This Route Travels Eastbound & Westbound,3,https://app.rtd-denver.com/nextride/route/104L,0076CE,FFFFFF
+105,RTD,105,Havana Street,This Route Travels Northbound & Southbound,3,https://app.rtd-denver.com/nextride/route/105,0076CE,FFFFFF
+113G,RTD,G,Union Station to Wheat Ridge Ward Station,This Route Travels Eastbound & Westbound,2,https://app.rtd-denver.com/nextride/route/G,F6B221,FFFFFF
+121,RTD,121,Peoria Street,This Route Travels Northbound & Southbound,3,https://app.rtd-denver.com/nextride/route/121,0076CE,FFFFFF
+145X,RTD,145X,Brighton / Denver Airport ,This Route Travels Northbound & Southbound,3,https://app.rtd-denver.com/nextride/route/145X,64A70B,FFFFFF
+15,RTD,15,East Colfax Avenue,This Route Travels Eastbound & Westbound,3,https://app.rtd-denver.com/nextride/route/15,0076CE,FFFFFF
+153,RTD,153,Chambers Road,This Route Travels Northbound & Southbound,3,https://app.rtd-denver.com/nextride/route/153,0076CE,FFFFFF
+169L,RTD,169L,Buckley / Tower DIA Limited,This Route Travels Northbound & Southbound,3,https://app.rtd-denver.com/nextride/route/169L,0076CE,FFFFFF
+42,RTD,42,Montbello via Albrook/GVR,This Route Travels Eastbound & Westbound,3,https://app.rtd-denver.com/nextride/route/42,0076CE,FFFFFF
+45,RTD,45,Montbello via 51st/GVR,This Route Travels Eastbound & Westbound,3,https://app.rtd-denver.com/nextride/route/45,0076CE,FFFFFF
+73,RTD,73,Quebec Street,This Route Travels Northbound & Southbound,3,https://app.rtd-denver.com/nextride/route/73,0076CE,FFFFFF
+A,RTD,A,Union Station to Denver Airport Station,This Route Travels Eastbound & Westbound,2,https://app.rtd-denver.com/nextride/route/A,57C1E9,FFFFFF
+AB1,RTD,AB1,Boulder / Denver Airport,This Route Travels Eastbound & Westbound,3,https://app.rtd-denver.com/nextride/route/AB1,57C1E9,FFFFFF
+ATA,RTD,ATA,Arapahoe County / Denver Airport,This Route Travels Northbound & Southbound,3,https://app.rtd-denver.com/nextride/route/ATA,57C1E9,FFFFFF

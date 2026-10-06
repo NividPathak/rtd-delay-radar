@@ -1,0 +1,20 @@
+route_id,service_id,trip_id,trip_headsign,direction_id,block_id,shape_id
+104L,WK,116034942,Denver Airport Station via Thornton Crossroads,0,104L 61,1341662
+105,WK,116035269,Central Park,0, 105 10,1341674
+113G,MT,116036375,Union Station,0, 113 21,1341715
+121,WK,116037951,40th & Airport Stn via Montbello,0, 121  2,1341782
+121,WK,116037952,40th & Airport Stn via Montbello,0, 121  1,1341782
+145X,WK,116038871,Denver Airpt,1,  11  4,1341815
+15,WK,116039314,Union Station Downtown,1,  15  1,1341846
+153,WK,116039591,Peoria Stn via Chambers,0, 153  1,1341853
+169L,WK,116040724,Denver Airport via Buckley Rd,0, 15L 19,1341874
+42,WK,116045136,Green Valley Ranch,0,  42  5,1342039
+42,WK,116045138,Green Valley Ranch,0,  16 17,1342037
+42,WK,116045224,Central Park Stn via Montbello,1,  42  3,1342043
+45,WK,116045973,Green Valley Ranch,0,  42  3,1342053
+45,WK,116046010,Peoria Stn via Montbello,1,  42  4,1342055
+45,WK,116046011,Peoria Stn via Montbello,1,  65  1,1342055
+73,WK,116048029,Belleview Stn via Quebec,1,  73  2,1342138
+A,MT,116064960,Denver Airport,0,   A  1,1342201
+AB1,WK,116056098,Denver Airport via E-470,0,  AB  1,1342751
+ATA,WK,116050274,Denver Airport via 40th & Airport Stn,0,  AT 31,1342244
