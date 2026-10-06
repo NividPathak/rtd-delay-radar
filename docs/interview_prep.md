@@ -35,3 +35,20 @@ A health script lists the files in the volume, reads the timestamps from the fil
 
 **5. Something you found that surprised you?**
 `caffeinate -i <command>` did not actually prevent sleep in my setup: the process had no sleep assertion. I checked with `pmset -g assertions` and switched to `caffeinate -w <pid>`, which ties the assertion to the collector's PID. Lesson: verify the mechanism, not just that the command ran.
+
+## M2. Bronze and silver
+
+**1. Why `trigger(availableNow=True)` instead of a continuous stream?**
+Free Edition has a daily compute quota, and an always-on stream would use it up. `availableNow` is still Structured Streaming with checkpoints and exactly-once processing. It processes everything that arrived since the last run, then stops. I run it every 2 hours. The tradeoff is freshness: up to 2 hours of latency, which is fine for building training data.
+
+**2. How does Auto Loader avoid processing a file twice?**
+It records every file it has ingested in the checkpoint. On the next run it only picks up files it has not seen. The checkpoint is per target and per feed, so the dev and prod runs never interfere.
+
+**3. Your first bronze version ran out of memory. What happened and how did you fix it?**
+I parsed protobuf in a Python UDF. A daytime snapshot is only 0.6 MB, but it has 21,000 stop updates and becomes about 9 MB of Python objects. Spark sends UDF rows in batches, so one batch needed nearly 1 GB in the serverless Python sandbox. I switched to Spark's built-in `from_protobuf`, which decodes in the JVM, and kept the Python parser as a test oracle. A unit test checks that both give identical output on real snapshots.
+
+**4. How do you compute the scheduled arrival time from GTFS?**
+GTFS gives times like `25:30:00` relative to the service day, not clock times. The spec defines the reference as noon local time minus 12 hours, which is midnight on normal days but stays correct on daylight saving days. I add the offset in seconds to that reference. A unit test checks 2026-11-01, when DST ends.
+
+**5. What data quality problem did you find in RTD's feed?**
+For early-morning trips, RTD's trip update `start_date` is one day behind. The static schedule and the vehicle feed both show the trip runs the next day. Left alone, every early-morning delay would be off by 24 hours. Real delays are within hours, so I round the raw delay to whole days to detect the error, correct the date, and keep a column recording the correction. A warn-only expectation reports how often it happens: 0.07% of rows on the first day.
