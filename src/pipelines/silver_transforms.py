@@ -155,25 +155,26 @@ def with_scheduled_delay(updates: DataFrame, schedule: DataFrame) -> DataFrame:
 
 
 def clean_vehicle_positions(bronze: DataFrame) -> DataFrame:
-    """Cast timestamps, flag in-service vehicles, and drop repeated position reports."""
-    return (
-        bronze.select(
-            "vehicle_id",
-            "trip_id",
-            "route_id",
-            "latitude",
-            "longitude",
-            "bearing",
-            "current_status",
-            "stop_id",
-            "occupancy_status",
-            F.timestamp_seconds("vehicle_timestamp").alias("vehicle_ts"),
-            F.timestamp_seconds("feed_timestamp").alias("feed_ts"),
-            "ingest_ts",
-        )
-        .withColumn("in_service", F.col("trip_id").isNotNull())
-        .dropDuplicates(["vehicle_id", "vehicle_ts"])
-    )
+    """Cast timestamps and flag vehicles that are serving a trip."""
+    return bronze.select(
+        "vehicle_id",
+        "trip_id",
+        "route_id",
+        "latitude",
+        "longitude",
+        "bearing",
+        "current_status",
+        "stop_id",
+        "occupancy_status",
+        F.timestamp_seconds("vehicle_timestamp").alias("vehicle_ts"),
+        F.timestamp_seconds("feed_timestamp").alias("feed_ts"),
+        "ingest_ts",
+    ).withColumn("in_service", F.col("trip_id").isNotNull())
+
+
+def dedupe_vehicle_positions(df: DataFrame) -> DataFrame:
+    """Drop repeated (vehicle_id, vehicle_ts) reports. Needs a watermark on vehicle_ts."""
+    return df.dropDuplicates(["vehicle_id", "vehicle_ts"])
 
 
 def alert_route_versions(bronze: DataFrame) -> DataFrame:

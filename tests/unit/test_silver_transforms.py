@@ -9,6 +9,7 @@ from src.pipelines.silver_transforms import (
     alert_route_versions,
     clean_vehicle_positions,
     dedupe_stop_updates,
+    dedupe_vehicle_positions,
     explode_stop_time_updates,
     gtfs_seconds,
     latest_version,
@@ -120,6 +121,7 @@ def test_clean_vehicle_positions_flags_service(spark) -> None:
     vp = clean_vehicle_positions(bronze(spark, "vehicle_positions"))
     assert vp.filter("in_service").count() == 7
     assert vp.filter("vehicle_ts is null").count() == 0
+    assert dedupe_vehicle_positions(vp.unionByName(vp)).count() == vp.count()
 
 
 def test_alert_route_versions_one_row_per_route_stop(spark) -> None:
