@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-M2, bronze and silver (branch `m2-bronze-silver`, stacked on `m1-collector`). Verified end to end on one day in the dev target. Waiting on: user OK to deploy the prod target with its 2-hour schedule (that is the M2 "Done when").
+M3, gold (branch `m3-gold`, stacked on `m2-bronze-silver` and `m1-collector`). Code done and verified in dev. Prod is deployed with a 2-hour schedule (first run succeeded in 5.8 min). Prod gold is waiting on the next scheduled run after a Free Edition `RESOURCE_EXHAUSTED` error.
 
 Previous:
 
@@ -43,6 +43,16 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 - [ ] 48 hours of continuous data with no gaps over 5 minutes (earliest 2026-10-08 09:00 UTC).
 - [x] `docs/architecture.md` and `docs/interview_prep.md` M1 entries.
 
+## M3 checklist
+
+- [x] `gold.stop_arrivals`: one row per trip and stop, observed arrival from the last prediction, `is_observed` when made at most 2 minutes before arrival.
+- [x] `gold.route_delay_hourly`: observed delay by route, date, local hour, weekday flag.
+- [x] `notebooks/eda_delays.py`: label quality, distributions, time of day, worst routes, the 5 pm query, delay along a trip.
+- [x] Verified in dev on 2026-10-06: 96% to 98% observed labels in hours with continuous collection.
+- [x] `docs/architecture.md` and `docs/interview_prep.md` M3 entries.
+- [ ] Prod gold built. The first prod gold update failed with Free Edition `RESOURCE_EXHAUSTED` (too much serverless compute running at once). Not retried. The next scheduled run (every 2 h) will build it.
+- [ ] "Done when": answer the 5 pm weekday question with one query (section 5 of the notebook). Needs observed weekday data at 17:00 Denver, so it needs a full day with no collection gaps around 5 pm.
+
 ## M2 checklist
 
 - [x] Bronze: Auto Loader binaryFile, `from_protobuf` decode, availableNow, checkpoints in `rtd.landing.checkpoints`.
@@ -51,7 +61,7 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 - [x] Expectations with pass rates (dev run on 2026-10-06): trip_id, delay ±2h, schedule match 100%; date correction 99.93%; vehicle position in Denver area 99.88%.
 - [x] Unit tests (52) including a Spark vs Python decoder cross-check on real snapshots.
 - [x] `docs/architecture.md` and `docs/interview_prep.md` M2 entries.
-- [ ] Deploy prod target and confirm one scheduled run (needs user OK, first prod run reads all history so far).
+- [x] Prod target deployed (user OK 2026-10-06). First run: bronze 172 s, silver 171 s, success. Schedule every 2 hours, unpaused.
 
 ## First-time setup checklist
 
@@ -92,3 +102,8 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 - Quota note: the first failed silver run retried itself for about 12 minutes. Retries are now off (`pipelines.numUpdateRetryAttempts: 0`).
 - Size note: one day is about 15 million silver stop update rows. Three weeks is roughly 300 million. Gold (M3) should reduce this to one row per trip and stop.
 - Next: user OK for prod deploy, then M3 once M1 is merged.
+
+### 2026-10-06 (evening): M3
+- Done: gold transforms with tests, gold views in the pipeline, EDA notebook, docs. Dev gold verified.
+- Prod: first scheduled-target run succeeded (5.8 min). The prod gold update then failed with `RESOURCE_EXHAUSTED` because the SQL warehouse was still running. Warehouse stopped, nothing retried.
+- Next: confirm the next scheduled prod run builds gold; answer the 5 pm query once a gap-free weekday afternoon is collected; GitHub secrets for the backup collector (still the top priority for data quality).
