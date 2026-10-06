@@ -57,7 +57,7 @@ def scheduled_stops(stop_times: DataFrame, trips: DataFrame, routes: DataFrame) 
     stops = stop_times.select(
         "trip_id",
         F.col("stop_sequence").cast("int").alias("stop_sequence"),
-        "stop_id",
+        F.col("stop_id").alias("scheduled_stop_id"),
         gtfs_seconds(F.col("arrival_time")).alias("scheduled_arrival_secs"),
         gtfs_seconds(F.col("departure_time")).alias("scheduled_departure_secs"),
     )

@@ -90,7 +90,9 @@ def test_scheduled_stops_marks_rail_and_bus(schedule) -> None:
 def test_stop_updates_join_schedule_and_compute_delay(spark, schedule) -> None:
     updates = dedupe_stop_updates(explode_stop_time_updates(bronze(spark, "trip_updates")))
     silver = with_scheduled_delay(updates, schedule)
+    assert len(silver.columns) == len(set(silver.columns)), "duplicate column names"
     assert silver.count() == 697
+    assert silver.filter("stop_id != scheduled_stop_id").count() == 0
     with_arrival = silver.filter("predicted_arrival_ts is not null")
     assert with_arrival.filter("scheduled_arrival_ts is null").count() == 0
     worst = with_arrival.agg(F.max(F.abs("arrival_delay_s")).alias("m")).first().m
