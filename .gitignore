@@ -1,0 +1,31 @@
+# Secrets and credentials
+.databrickscfg
+.env
+.env.*
+*.pem
+*token*
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# Databricks
+.databricks/
+
+# Raw data (only small fixtures under tests/fixtures/ are committed)
+data/
+raw/
+collector_output/
+*.pb
+!tests/fixtures/**/*.pb
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
