@@ -86,3 +86,48 @@ Each entry: the options, the choice, the reason.
 - **Reason:** A laptop sleeps when the lid closes. (a) would double every upload for no gain and spend about 24 runner-hours a day. (b) costs about 30 seconds per check while the laptop is healthy. The `concurrency` group stops two backup runs from overlapping.
 - **Known limits:** GitHub can delay scheduled runs by several minutes or more under load, so a laptop outage can still leave a gap of about 15 to 30 minutes before the backup starts. Gaps are measured with `python -m src.collector.health --volume` and documented.
 - **Auth:** The runner needs a Databricks personal access token in the repo secret `DATABRICKS_TOKEN` (plus `DATABRICKS_HOST`). The token is created by the user and never written to the repo. A service principal with OAuth would be cleaner. Revisit in M6 if Free Edition allows it.
+
+## 2026-10-06: Static GTFS source and versioning
+
+- **Source:** `https://www.rtd-denver.com/files/gtfs/google_transit.zip` (RTD's GTFS page links the same license agreement already accepted for GTFS-Realtime).
+- **Choice:** `src/collector/static_gtfs.py` keeps 7 of the 9 files (not `shapes.txt` or `agency.txt`) and uploads them to `raw/static/version=<feed_version>/`. A version already in the volume is skipped. Silver uses the version with the newest `feed_start_date`.
+- **Reason:** RTD changes schedules about three times a year. Keeping each version means a later model can join each day to the schedule that was in effect, instead of silently using today's. For now silver uses only the latest version. Revisit when the first schedule change happens during collection.
+- **User-Agent:** RTD's download server returned 403 to Python's default `Python-urllib` User-Agent. All requests now send `rtd-delay-radar/0.1 (+repo URL)`, which honestly identifies the project.
+
+## 2026-10-06: Dev target writes to separate schemas
+
+- **Options:** Dev and prod share the bronze/silver tables (dev just filters by date), or dev writes to its own schemas.
+- **Choice:** The bundle variable `schema_prefix` is `dev_` on the dev target, so dev writes to `rtd.dev_bronze`, `rtd.dev_silver`, `rtd.dev_gold` with its own checkpoints. Dev also sets `dev_date` so Auto Loader only reads one day of files.
+- **Reason:** A dev run with a date filter would otherwise mark files as processed in the shared checkpoint, and prod would never pick up the rest. Separate schemas keep experiments away from the real tables.
+
+## 2026-10-06: Bronze decodes protobuf with Spark `from_protobuf`, not a Python UDF
+
+- **What happened:** The first dev run failed with `[UDF_PYSPARK_ERROR.OOM] Python worker exited unexpectedly (crashed) due to running out of memory`. A daytime TripUpdate snapshot is about 0.6 MB with 741 trips and 21,064 stop updates. Parsed into Python dicts it takes about 9 MB, and Spark sends rows to a Python UDF in batches, so one batch needed close to 1 GB in the serverless Python sandbox. The overnight fixtures were too small to show this.
+- **Options:** (a) Keep the UDF and shrink batches through Spark configs (serverless only allows a short list of configs). (b) A Python UDTF that yields rows one at a time. (c) Spark's built-in `from_protobuf`, which decodes in the JVM.
+- **Choice:** (c). The schema comes from the `gtfs-realtime-bindings` package as a serialized `FileDescriptorSet` (`binaryDescriptorSet`), so no `.proto` or `.desc` file has to be maintained.
+- **Checked:** On a 0.6 MB daytime snapshot both decoders give 741 trips and 21,064 stop updates. A unit test compares every field of the Spark output with the pure-Python parser on all three fixtures. The only differences were two unset enums, where `from_protobuf` fills in the GTFS-RT spec default (`SCHEDULED`, `IN_TRANSIT_TO`). The Python parser now applies the same defaults and stays as a test oracle.
+- **Local tests** load the `spark-protobuf` jar through `spark.jars.packages`. It is part of Apache Spark and is built into Databricks.
+
+## 2026-10-06: RTD TripUpdate `start_date` is a day behind for early-morning trips
+
+- **Found:** In the 02:54 Denver fixture, every trip update says `start_date=20261005`, but the trips run on Oct 6. The static schedule starts trip 116037952 at `02:55:00` (service day Oct 6), and the vehicle feed reports `start_date=20261006` for the same trips. Using RTD's date made every delay exactly 24 hours too large.
+- **Options:** Drop these rows, trust the vehicle feed's date (only some trips have vehicles), or correct the date from the data.
+- **Choice:** `service_date_shift_days = round(raw_delay / 86400)`, limited to -1, 0, or +1. Real delays are within hours, while a wrong date shifts the delay by about 24 hours, so rounding to whole days finds the error without touching real delays. The shift is kept as a column, and the pipeline expectation `start_date_not_shifted` reports how often RTD's date was wrong.
+- **Leakage check:** The correction uses only the current prediction and the static schedule, both known at prediction time.
+
+## 2026-10-06: Scheduled times use GTFS "noon minus 12 hours"
+
+- **Choice:** Scheduled time = (noon local time on the service date, minus 12 hours) + the `HH:MM:SS` offset from `stop_times.txt`.
+- **Reason:** The GTFS spec defines times this way so they stay correct on daylight saving days. Midnight would put every scheduled time on 2026-11-01 (DST ends) one hour off. A unit test covers that date.
+
+## 2026-10-06: Silver table types
+
+- **`stop_time_updates`, `vehicle_positions`:** streaming tables. They read bronze incrementally and deduplicate with a 2-hour watermark on the event time (`feed_ts`, `vehicle_ts`). The event time is part of the dedupe key, so Spark can discard old dedupe state.
+- **`alerts`:** materialized view. An alert repeats in every snapshot, so silver keeps one row per alert and affected route/stop with `first_seen_ts` and `last_seen_ts`. That needs a group-by over all history, which a materialized view refreshes incrementally.
+- **Static GTFS (`gtfs_*`):** materialized views over the CSV files, latest version only.
+- **Expectations:** drop rows with a null `trip_id`, a delay outside ±2 hours, a null `vehicle_id`, or a position outside the Denver area. Warn only (keep the row, count failures) for `matched_schedule` and `start_date_not_shifted`, so pass rates show up in the pipeline's event log.
+
+## 2026-10-06: Refresh every 2 hours
+
+- **Options:** Every hour or every 2 hours (the plan allows 1 to 2).
+- **Choice:** Every 2 hours in prod, until one run's quota cost is measured. The dev target's schedule is paused by development mode.
