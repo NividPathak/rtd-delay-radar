@@ -48,3 +48,21 @@ Each entry: the options, the choice, the reason.
 - **Choice:** SQL `CREATE CATALOG IF NOT EXISTS rtd` on the Serverless Starter Warehouse, in `src/common/setup_catalog.py`.
 - **Reason:** Databricks docs say serverless workspaces create catalogs on default storage through SQL or the UI, not through the REST API. SQL keeps setup in code and keeps the `rtd` naming from the plan. Schemas and the volume are created through the SDK, which works on default storage.
 - **Why not in the Asset Bundle:** Bundle-managed schemas get destroyed with `bundle destroy` and get renamed in `dev` mode. The raw volume holds data that cannot be re-downloaded, so it is created once by this script and is not managed by the bundle.
+
+## 2026-10-06: Spike 2, outbound access from serverless compute
+
+- **Test:** `m0_spike_job` (deployed by the bundle) runs `notebooks/spike_outbound_access.py` on serverless compute and fetches each feed once.
+- **Result:** Outbound access works on this Free Edition workspace. All three feeds returned HTTP 200 (run on 2026-10-06 at 03:01 Denver time).
+- **First attempt:** Failed before any network call with `OSError: [Errno 5] Input/output error` while importing `src/common/config.py` from the synced bundle files. The file was uploaded correctly (checked with `databricks workspace export`). The unchanged rerun passed, so this looks like a transient workspace file read error right after deploy. Watch for it in M2. If it comes back, package `src/` as a wheel the way the official bundle template does.
+
+## 2026-10-06: Keep the collector outside Databricks even though outbound works
+
+- **Options:** Poll RTD from a Databricks job, or from an external Python process (laptop, with GitHub Actions as backup).
+- **Choice:** External collector.
+- **Reason:** Polling must happen every 60 seconds. Every job run on serverless compute pays startup time and uses the daily quota, and CLAUDE.md caps job schedules at once per hour. A tiny external process polls for free and only uploads files. Databricks then processes the files in hourly `availableNow` bursts. Spike 2 shows a Databricks fallback is possible if the laptop collector has long outages, but it would be expensive on quota.
+
+## 2026-10-06: Laptop collector runs under `caffeinate`
+
+- **Choice:** For now the collector runs as a background process wrapped in `caffeinate -i`, logging to `data/logs/collector.log`.
+- **Limits:** `caffeinate -i` stops idle sleep but not sleep from closing the lid. A restart or crash stops collection until it is started again. Gaps are reported by `python -m src.collector.health` and are not hidden.
+- **Next:** M1 adds the GitHub Actions runner as a backup and could add a launchd agent so the collector restarts on its own.
