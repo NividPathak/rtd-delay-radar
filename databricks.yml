@@ -1,0 +1,30 @@
+# Databricks Asset Bundle for RTD Delay Radar.
+# Docs: https://docs.databricks.com/dev-tools/bundles/index.html
+bundle:
+  name: rtd_delay_radar
+  uuid: 05c9cfaf-80d3-46a4-961b-97eb0041839b
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for all project tables
+    default: rtd
+
+targets:
+  dev:
+    # Development mode prefixes resource names with "[dev <user>]" and pauses schedules.
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-5b0fa231-e20d.cloud.databricks.com
+
+  prod:
+    mode: production
+    workspace:
+      host: https://dbc-5b0fa231-e20d.cloud.databricks.com
+      root_path: /Workspace/Users/nivid.pathak16@gmail.com/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: nivid.pathak16@gmail.com
+        level: CAN_MANAGE
