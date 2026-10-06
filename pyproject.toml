@@ -13,6 +13,7 @@ dependencies = [
 rtd-bronze = "src.bronze.ingest:main"
 rtd-build-features = "src.features.build:main"
 rtd-train = "src.ml.train:main"
+rtd-score = "src.ml.score:main"
 
 [dependency-groups]
 dev = [

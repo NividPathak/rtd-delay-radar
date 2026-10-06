@@ -1,4 +1,4 @@
-# Bronze (Auto Loader, availableNow) then the silver pipeline.
+# Bronze (Auto Loader, availableNow), then the silver and gold pipeline, then scoring.
 # Runs every 2 hours in prod. Development mode pauses the schedule on the dev target.
 resources:
   jobs:
@@ -25,9 +25,25 @@ resources:
             - task_key: bronze
           pipeline_task:
             pipeline_id: ${resources.pipelines.rtd_silver.id}
+        - task_key: score
+          depends_on:
+            - task_key: silver
+          python_wheel_task:
+            package_name: rtd_delay_radar
+            entry_point: rtd-score
+            parameters:
+              - "--schema-prefix"
+              - "${var.schema_prefix}"
+          environment_key: ml
       environments:
         - environment_key: default
           spec:
             environment_version: "5"
             dependencies:
               - ../dist/*.whl
+        - environment_key: ml
+          spec:
+            environment_version: "5"
+            dependencies:
+              - ../dist/*.whl
+              - mlflow
