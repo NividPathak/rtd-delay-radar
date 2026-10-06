@@ -6,9 +6,9 @@ from src.collector.uploader import VolumeUploader
 
 
 def test_snapshot_path_is_partitioned_in_utc() -> None:
-    # 2026-10-06 04:54:37 UTC (22:54 the previous day in Denver)
+    # 2026-10-06 08:54:37 UTC (02:54 in Denver)
     path = snapshot_relative_path("trip_updates", 1791276877)
-    assert path == "feed=trip_updates/date=2026-10-06/hour=04/trip_updates_1791276877.pb"
+    assert path == "feed=trip_updates/date=2026-10-06/hour=08/trip_updates_1791276877.pb"
 
 
 def test_save_local_creates_folders(tmp_path: Path) -> None:
