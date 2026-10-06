@@ -1,8 +1,9 @@
-# Silver layer: Lakeflow Declarative Pipeline on serverless compute.
+# Silver and gold layers: one Lakeflow Declarative Pipeline on serverless compute.
+# The resource key stays rtd_silver: renaming it would recreate the pipeline and its tables.
 resources:
   pipelines:
     rtd_silver:
-      name: rtd_silver
+      name: rtd_silver_gold
       catalog: ${var.catalog}
       schema: ${var.schema_prefix}silver
       serverless: true
@@ -12,6 +13,7 @@ resources:
             include: ../src/pipelines/transformations/**
       configuration:
         rtd.bronze_schema: ${var.catalog}.${var.schema_prefix}bronze
+        rtd.gold_schema: ${var.catalog}.${var.schema_prefix}gold
         rtd.static_path: /Volumes/${var.catalog}/landing/raw/static
         # Deployed repo root. silver.py adds it to sys.path so `import src...` works.
         rtd.code_root: ${workspace.file_path}
