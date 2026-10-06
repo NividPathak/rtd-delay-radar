@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-First-time setup (blocked on user confirmations). Next: M0, setup and spikes.
+M0, setup and spikes (branch `m0-setup`). Collector is built first.
 
 ## First-time setup checklist
 
@@ -10,14 +10,15 @@ First-time setup (blocked on user confirmations). Next: M0, setup and spikes.
 - [x] Step 2. GitHub repo: https://github.com/NividPathak/rtd-delay-radar, `main` pushed.
 - [x] Step 3. Databricks CLI v1.19.0 installed via Homebrew.
 - [x] Step 4. CLI authenticated with OAuth (profile `DEFAULT`), `databricks current-user me` verified.
-- [ ] Step 5. Confirm the workspace is Free Edition, not a trial. Waiting on user.
-- [ ] Step 6. Accept RTD GTFS-Realtime license. Waiting on user. No feed fetched yet.
+- [x] Step 5. User confirmed the workspace is Free Edition (2026-10-06).
+- [x] Step 6. User read and accepted the RTD GTFS-Realtime license (2026-10-06).
 - [x] Step 7. Python 3.11 venv via `uv`, `pyproject.toml`, ruff and pytest pass.
-- [ ] Step 8. Record and start M0.
+- [x] Step 8. Setup recorded. M0 started.
 
 ## Session log
 
 ### 2026-10-06
 - Done: setup steps 1 to 4 and 7. Repo skeleton matches the plan's layout.
-- Next: user confirms Free Edition and RTD license, then start M0 with the collector first.
+- User confirmed Free Edition and accepted the RTD license.
+- Next: M0 with the collector first.
 - Open problems: Java runtime missing for local Spark tests (decide before M2).
