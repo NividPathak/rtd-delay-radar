@@ -16,7 +16,16 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 
 ## Collector health (last check)
 
-- 2026-10-06 09:19 UTC: continuous since 08:57:37 UTC, no gaps over 5 minutes. Local and volume counts match.
+- 2026-10-06 21:26 UTC: 566 snapshots per feed since 08:57:37 UTC. **4 gaps over 5 minutes, about 3 hours in total.** Cause: the Mac slept with the lid closed (`pmset -g log` shows "Clamshell" sleep at 13:25 UTC). The collector itself never crashed. The backup runner was not active yet (no GitHub secrets).
+
+| Gap (UTC, 2026-10-06) | Length | Cause |
+|---|---|---|
+| 13:24 to 14:12 | 48 min | lid closed, Mac asleep |
+| 14:12 to 14:30 | 18 min | Mac asleep (dark wakes only) |
+| 14:32 to 15:26 | 54 min | Mac asleep |
+| 19:40 to 20:44 | 64 min | Mac asleep |
+
+- The M1 "48 hours with no gap over 5 minutes" clock restarts after the backup runner is active.
 - Laptop: launchd agent `com.rtd-delay-radar.collector` (auto-restart, `caffeinate -w` keeps the Mac from idle sleep). Log at `data/logs/collector.log`.
 - Check: `uv run python -m src.collector.health --volume --days 3`.
 - Stop: `launchctl bootout gui/$(id -u)/com.rtd-delay-radar.collector`. Start again: `sh ops/install_collector_agent.sh`.
