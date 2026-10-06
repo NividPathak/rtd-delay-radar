@@ -2,6 +2,10 @@
 
 ## Current milestone
 
+M2, bronze and silver (branch `m2-bronze-silver`, stacked on `m1-collector`). Verified end to end on one day in the dev target. Waiting on: user OK to deploy the prod target with its 2-hour schedule (that is the M2 "Done when").
+
+Previous:
+
 M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets for the backup runner, then 48 hours of data with no gaps over 5 minutes.
 
 ## Key dates
@@ -29,6 +33,16 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 - [x] Unit tests (25 total).
 - [ ] 48 hours of continuous data with no gaps over 5 minutes (earliest 2026-10-08 09:00 UTC).
 - [x] `docs/architecture.md` and `docs/interview_prep.md` M1 entries.
+
+## M2 checklist
+
+- [x] Bronze: Auto Loader binaryFile, `from_protobuf` decode, availableNow, checkpoints in `rtd.landing.checkpoints`.
+- [x] Static GTFS (routes, stops, trips, stop_times, calendar) uploaded by version and loaded as silver materialized views.
+- [x] Silver pipeline: dedupe, type casts, schedule join, DST-safe delay, RTD start_date correction.
+- [x] Expectations with pass rates (dev run on 2026-10-06): trip_id, delay ±2h, schedule match 100%; date correction 99.93%; vehicle position in Denver area 99.88%.
+- [x] Unit tests (52) including a Spark vs Python decoder cross-check on real snapshots.
+- [x] `docs/architecture.md` and `docs/interview_prep.md` M2 entries.
+- [ ] Deploy prod target and confirm one scheduled run (needs user OK, first prod run reads all history so far).
 
 ## First-time setup checklist
 
@@ -62,3 +76,10 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
   - Closing the lid still sleeps the Mac. The backup runner covers it once secrets are added.
   - Java runtime missing for local Spark tests (decide before M2).
   - Watch for the `Errno 5` workspace file read error in M2. Fallback is packaging `src/` as a wheel.
+
+### 2026-10-06 (later): M2
+- Done: bronze and silver code, bundle job and pipeline, verified on one day in dev.
+- Problems fixed along the way: Python UDF out of memory (switched to `from_protobuf`), pipeline could not import `src` (added `rtd.code_root` to `sys.path`), duplicate `stop_id` column, RTD start_date one day behind for early trips, RTD static download rejected Python's default User-Agent.
+- Quota note: the first failed silver run retried itself for about 12 minutes. Retries are now off (`pipelines.numUpdateRetryAttempts: 0`).
+- Size note: one day is about 15 million silver stop update rows. Three weeks is roughly 300 million. Gold (M3) should reduce this to one row per trip and stop.
+- Next: user OK for prod deploy, then M3 once M1 is merged.
