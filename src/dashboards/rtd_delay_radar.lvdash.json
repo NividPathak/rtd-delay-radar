@@ -64,7 +64,9 @@
       "name": "ds_mon_horizon",
       "displayName": "Error by horizon",
       "queryLines": [
-        "SELECT predictor, concat(CAST(horizon AS STRING), ' stops') AS horizon_label, horizon,\n",
+        "SELECT predictor,\n",
+        "       CASE WHEN horizon = 1 THEN '1 stop' ELSE concat(CAST(horizon AS STRING), ' stops') END AS horizon_label,\n",
+        "       horizon,\n",
         "       round(sum(mae_s * n) / sum(n), 1) AS mae_s\n",
         "FROM prediction_monitoring\n",
         "GROUP BY predictor, horizon\n",
@@ -334,7 +336,7 @@
           "position": {
             "x": 0,
             "y": 4,
-            "width": 8,
+            "width": 7,
             "height": 8
           }
         },
@@ -387,7 +389,7 @@
                   },
                   {
                     "fieldName": "avg_delay_min",
-                    "displayName": "Avg delay (min)"
+                    "displayName": "Avg min late"
                   }
                 ]
               },
@@ -400,9 +402,9 @@
             }
           },
           "position": {
-            "x": 8,
+            "x": 7,
             "y": 4,
-            "width": 4,
+            "width": 5,
             "height": 8
           }
         },
@@ -574,7 +576,16 @@
                   "fieldName": "horizon_label",
                   "displayName": "Stops ahead",
                   "scale": {
-                    "type": "categorical"
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "1 stop",
+                        "5 stops",
+                        "10 stops",
+                        "20 stops"
+                      ]
+                    }
                   }
                 },
                 "y": {
