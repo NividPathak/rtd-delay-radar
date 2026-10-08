@@ -103,3 +103,20 @@ Up to about 2 hours behind, because the pipeline runs in `availableNow` bursts e
 
 **5. Why is the dashboard a JSON file in Git?**
 So it is deployed by the Asset Bundle like everything else, reviewed in pull requests, and identical between dev and prod. The bundle sets which schema the dashboard reads, so one file serves both targets.
+
+## M6. CI/CD and write-up
+
+**1. How does code get to production?**
+Through a pull request. CI runs lint, unit tests on a local Spark session, and validates the Databricks bundle. After merge, a GitHub Actions workflow runs the tests again and deploys the prod target with `databricks bundle deploy`. Jobs, the pipeline, and the dashboard are all defined in the bundle, so nothing is created by hand.
+
+**2. How do you test Spark code without a cluster?**
+Every transformation is a pure function from DataFrames to a DataFrame, tested on a local Spark session with small real RTD snapshots saved in the repo. Pipeline files only wire those functions together. Databricks is only used to verify end to end.
+
+**3. What would you change with a bigger budget?**
+Refresh every 10 to 15 minutes instead of every 2 hours (same code, different trigger), move polling into Databricks to remove laptop gaps, join each day to the schedule version in effect, and serve the model behind an endpoint.
+
+**4. What went wrong during the project?**
+Laptop sleep cost about 27% of the first two days of data. GitHub only runs scheduled workflows from the default branch, so the backup collector could not run until I merged it, which conflicted with my own "merge only when done" rule. I documented the conflict and merged early on purpose. I also hit the Free Edition limit on concurrent compute by running a manual job at the same minute as a scheduled one.
+
+**5. How do you keep the project honest?**
+Preliminary models are tagged and never promoted. Results stay "pending full data" until there are 3 weeks and a held-out week. Collection gaps are measured and published in the README. If the model loses to a baseline somewhere, the results page will say so.
