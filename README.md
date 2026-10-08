@@ -4,7 +4,7 @@ Real-time transit delay prediction for Denver RTD on Databricks Free Edition and
 
 A streaming lakehouse that ingests live RTD GTFS-Realtime feeds, builds bronze, silver, and gold Delta tables, and trains a model that predicts stop-level arrival delays.
 
-**Status:** M0 complete. M1 (collector) waiting on 48 hours of continuous data. M2 (bronze and silver) verified on one day in the dev target. The collector has been running since 2026-10-06. See [PROGRESS.md](PROGRESS.md) and [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status:** M0 complete. M1 (collector) waiting on 48 hours of continuous data. M2 (bronze, silver) running in prod every 2 hours. M3 (gold labels) verified in dev. The collector has been running since 2026-10-06. See [PROGRESS.md](PROGRESS.md) and [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 ## Architecture
 
@@ -19,9 +19,12 @@ RTD GTFS-RT feeds --> collector (laptop + GitHub Actions backup, every 60 s)
                           |  Lakeflow Declarative Pipeline + expectations
                           v
              rtd.silver.*  (stop updates with scheduled delay, vehicles, alerts, static GTFS)
+                          |  same pipeline, materialized views
+                          v
+             rtd.gold.stop_arrivals, rtd.gold.route_delay_hourly  (observed delay per trip stop)
                           |
                           v
-             gold, model, dashboard  (M3 to M5)
+             model, dashboard  (M4, M5)
 ```
 
 Details and reasoning: [docs/architecture.md](docs/architecture.md). Design choices: [docs/decisions.md](docs/decisions.md).

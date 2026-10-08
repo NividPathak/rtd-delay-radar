@@ -112,3 +112,37 @@ The `dev` bundle target runs the same code against `rtd.dev_bronze` and `rtd.dev
 - **Why bronze is a job and silver is a pipeline.** Bronze needs `from_protobuf` and file-level control of Auto Loader, which is plain Structured Streaming. Silver is mostly joins, deduplication, and quality rules, which is what Lakeflow pipelines do well: they manage dependencies between tables and record expectation results without extra code.
 - **Why not a Python UDF for parsing.** It was the first version. On daytime snapshots it ran out of memory in the serverless Python sandbox. `from_protobuf` runs in the JVM and handles them easily.
 - **Why the transformations are plain functions.** Every silver step is a function that takes and returns DataFrames, tested on a local Spark session with real RTD snapshots. The pipeline file only wires them together, so almost all logic is tested without touching Databricks.
+
+## M3. Gold tables and labels
+
+### What exists now
+
+```
+rtd.silver.stop_time_updates   (every prediction, every snapshot)
+      |  group by (service_date, trip_id, stop_sequence), keep the last prediction
+      v
+rtd.gold.stop_arrivals         one row per trip and stop: scheduled, observed arrival, delay_s
+      |  observed labels only, by route, date, local hour
+      v
+rtd.gold.route_delay_hourly    avg and median delay, share more than 5 minutes late
+```
+
+`notebooks/eda_delays.py` explores both tables: label quality, delay distribution, time of day, worst routes, the 5 pm question, and delay growth along a trip.
+
+### How a label is made
+
+1. RTD keeps an upcoming stop in each trip update until the vehicle passes it, then drops it.
+2. For each trip and stop, gold keeps RTD's **last** prediction before the stop disappeared. That is the observed arrival.
+3. `label_lead_s` says how far ahead of the arrival that last prediction was made. If it is at most 2 minutes, the vehicle was about to arrive, so the label is trusted (`is_observed`).
+4. `delay_s` = observed arrival minus scheduled arrival.
+
+### What the first day showed
+
+- In hours when the collector ran continuously, 96% to 98% of trip-stops got a trusted label. In hours with gaps (the laptop slept), only 10% to 42% did. The labels are only as good as the collector's uptime.
+- Observed delay medians on the first day: bus 69 s, rail 70 s. One day is not a result. These numbers will be reported properly after three weeks.
+
+### Why it is built this way
+
+- **Why not use vehicle positions for labels.** Most vehicles in the feed do not carry a trip id, so matching positions to stops would label few arrivals. The last-prediction method labels almost every stop when collection is continuous.
+- **Why a materialized view.** A label keeps changing until the vehicle passes the stop, so gold must be recomputed rather than appended to. A materialized view recomputes from silver on each pipeline update, incrementally when it can.
+- **Why `route_delay_hourly` uses local time.** Riders and the dashboard think in Denver time ("5 pm on weekdays"), so the hour is taken from the scheduled arrival converted to America/Denver.

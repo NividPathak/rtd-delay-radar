@@ -29,4 +29,4 @@ for name, outcome in results.items():
 
 # COMMAND ----------
 
-dbutils.notebook.exit(str(results))  # noqa: F821
+dbutils.notebook.exit(str(results))

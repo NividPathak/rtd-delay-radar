@@ -54,3 +54,9 @@ LOCAL_TIMEZONE = "America/Denver"
 def table_name(schema: str, table: str, schema_prefix: str = "") -> str:
     """Full Unity Catalog name. table_name("bronze", "alerts", "dev_") is rtd.dev_bronze.alerts."""
     return f"{CATALOG}.{schema_prefix}{schema}.{table}"
+
+
+# Gold labels. The last prediction before a stop drops out of the feed is the observed
+# arrival, but only if that prediction was made at most this many seconds before arrival.
+LABEL_MAX_LEAD_SECONDS = 120
+LATE_THRESHOLD_SECONDS = 5 * 60
