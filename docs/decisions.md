@@ -218,3 +218,9 @@ Each feature must be computable at `t0` from data that existed at `t0`. Unit tes
 - **Choice:** `src/dashboards/rtd_delay_radar.lvdash.json`, deployed by the bundle. Dataset SQL uses bare table names, and the bundle sets `dataset_catalog: rtd` and `dataset_schema: ${var.schema_prefix}gold`, so the same file serves dev (`dev_gold`) and prod (`gold`).
 - **Reason:** No UI clicking, and one definition for both targets. Everything the dashboard needs is in gold, so the scoring task also writes `gold.live_vehicles` (latest position and delay per in-service vehicle) for the map.
 - **Format source:** The JSON follows Databricks' published AI/BI dashboard skill reference (`databricks/databricks-agent-skills`) and the `bundle-examples` dashboard. All six dataset queries were run against `rtd.dev_gold` and succeeded. The rendered widgets still need a visual check in the workspace UI.
+
+## 2026-10-08: Merge M1 before its "Done when" is met
+
+- **Conflict:** CLAUDE.md says to merge a milestone after its "Done when" holds. M1's is 48 hours with no gap over 5 minutes. On 2026-10-07 the laptop collector lost about 9 hours in 17 gaps (Mac sleep), so that needs the GitHub Actions backup runner. But GitHub only runs scheduled workflows from the default branch, and `collector.yml` was only on `m1-collector` ("workflow collector.yml not found on the default branch"). The condition could not be met without merging first.
+- **Choice (user approved 2026-10-08):** Merge M1 to `main` once CI passes, with the 48-hour condition stated as open in the pull request. Then merge M2 to M5 in order, each after CI.
+- **Still open:** the 48-hour check, after the backup runner has repo secrets and is confirmed working.
