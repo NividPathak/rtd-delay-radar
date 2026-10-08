@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- launchd agent for the laptop collector. Installed by ops/install_collector_agent.sh. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.rtd-delay-radar.collector</string>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- caffeinate -w holds a no-idle-sleep assertion until this PID exits.
+             exec then turns the shell into the collector, keeping the same PID. -->
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>/usr/bin/caffeinate -i -w $$ &amp; exec __REPO__/.venv/bin/python -m src.collector.run</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- The Databricks SDK calls the `databricks` CLI for OAuth tokens. -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>StandardOutPath</key>
+    <string>__REPO__/data/logs/collector.log</string>
+    <key>StandardErrorPath</key>
+    <string>__REPO__/data/logs/collector.log</string>
+</dict>
+</plist>

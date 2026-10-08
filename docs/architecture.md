@@ -42,3 +42,27 @@ Collector on the laptop (src/collector/run.py, every 60 s)
 
 - **Spike 1 (local parse):** All three feeds download and parse. Trip updates give predicted arrival times but no `delay` field, so delays will be computed against the static schedule in later milestones.
 - **Spike 2 (outbound from serverless):** Works. Details in `docs/decisions.md`.
+
+## M1. Collector that keeps running
+
+### What exists now
+
+```
+                    every 60 s                         upload
+Laptop  (launchd agent, caffeinate) --> RTD feeds --> /Volumes/rtd/landing/raw/
+                                                          ^
+GitHub Actions (every 15 min):                            |
+  freshness check: newest snapshot < 5 min old? --yes--> exit
+                                               --no---> collect for 55 min
+```
+
+- **Laptop runner.** A launchd agent starts the collector at login and restarts it within 30 seconds if it exits. A `caffeinate -w <pid>` helper stops the Mac from idle sleep while the collector runs.
+- **Backup runner.** `.github/workflows/collector.yml` asks the volume one question every 15 minutes: "Did anything arrive in the last 5 minutes?" If yes, the laptop is fine and the run ends. If no, it runs the same collector code for 55 minutes.
+- **Health checks.** `src/collector/health.py --volume` lists the files in the volume and reports the date range and every gap longer than 5 minutes. The file name holds the header timestamp, so no file has to be opened.
+
+### Why it is built this way
+
+- **One collector, two places to run it.** The GitHub runner uses exactly the same Python code as the laptop. Only the auth differs: OAuth through the Databricks CLI on the laptop, a token in GitHub secrets in CI.
+- **Backup, not duplicate.** Running both all the time would upload every file twice. Checking freshness first means GitHub only works when it is needed.
+- **Uploads are idempotent.** If both runners happen to save the same snapshot, the file name is identical (`<feed>_<header timestamp>.pb`) and the second upload just overwrites the first. No duplicates downstream.
+- **Gaps are measured, not hidden.** Lid-closed sleep and GitHub schedule delays can still leave short gaps. The health report finds them, and they are listed in PROGRESS.md and later in the README.

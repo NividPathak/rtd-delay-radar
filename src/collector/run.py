@@ -4,6 +4,7 @@ Usage:
     python -m src.collector.run            # run forever
     python -m src.collector.run --once     # one poll cycle, then exit
     python -m src.collector.run --no-upload
+    python -m src.collector.run --minutes 55   # stop after 55 minutes (GitHub Actions)
 """
 
 import argparse
@@ -95,19 +96,34 @@ def poll_once(
             logger.exception("poll failed for %s", name)
 
 
-def run_forever(state: CollectorState, local_root: Path, upload: Uploader | None) -> None:
-    """Poll on a fixed interval until the process is stopped."""
-    while True:
-        started = time.monotonic()
-        poll_once(state, local_root, upload)
-        elapsed = time.monotonic() - started
-        time.sleep(max(0.0, config.POLL_INTERVAL_SECONDS - elapsed))
+def run_loop(
+    state: CollectorState,
+    local_root: Path,
+    upload: Uploader | None,
+    max_minutes: float | None = None,
+    poll: Callable[..., None] = poll_once,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> int:
+    """Poll on a fixed interval. Stop after `max_minutes`, or never if it is None.
+
+    Returns the number of cycles run.
+    """
+    deadline = None if max_minutes is None else clock() + max_minutes * 60
+    cycles = 0
+    while deadline is None or clock() < deadline:
+        started = clock()
+        poll(state, local_root, upload)
+        cycles += 1
+        sleep(max(0.0, config.POLL_INTERVAL_SECONDS - (clock() - started)))
+    return cycles
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--once", action="store_true", help="run one cycle and exit")
     parser.add_argument("--no-upload", action="store_true", help="save locally only")
+    parser.add_argument("--minutes", type=float, help="stop after this many minutes")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -124,7 +140,7 @@ def main() -> None:
     if args.once:
         poll_once(state, local_root, upload)
     else:
-        run_forever(state, local_root, upload)
+        run_loop(state, local_root, upload, max_minutes=args.minutes)
 
 
 if __name__ == "__main__":

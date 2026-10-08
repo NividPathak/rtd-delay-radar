@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.collector.run import CollectorState, poll_once
+from src.collector.run import CollectorState, poll_once, run_loop
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 FEEDS = {"trip_updates": "url-tu", "alerts": "url-al"}
@@ -59,3 +59,21 @@ def test_failed_upload_is_retried_next_cycle(tmp_path: Path) -> None:
     poll_once(state, tmp_path, flaky_upload, FEEDS, fake_fetch)
     assert state.pending_uploads == []
     assert len(calls) == 4
+
+
+def test_run_loop_stops_after_max_minutes(tmp_path: Path) -> None:
+    now = [0.0]
+
+    def fake_sleep(seconds: float) -> None:
+        now[0] += seconds
+
+    cycles = run_loop(
+        CollectorState(),
+        tmp_path,
+        None,
+        max_minutes=5,
+        poll=lambda *args: None,
+        clock=lambda: now[0],
+        sleep=fake_sleep,
+    )
+    assert cycles == 5

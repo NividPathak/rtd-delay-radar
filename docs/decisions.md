@@ -66,3 +66,23 @@ Each entry: the options, the choice, the reason.
 - **Choice:** For now the collector runs as a background process wrapped in `caffeinate -i`, logging to `data/logs/collector.log`.
 - **Limits:** `caffeinate -i` stops idle sleep but not sleep from closing the lid. A restart or crash stops collection until it is started again. Gaps are reported by `python -m src.collector.health` and are not hidden.
 - **Next:** M1 adds the GitHub Actions runner as a backup and could add a launchd agent so the collector restarts on its own.
+
+## 2026-10-06: `caffeinate -i <command>` did not keep the Mac awake
+
+- **Problem:** Running `caffeinate -i python -m src.collector.run` left a Python process with the same PID and no sleep assertion. `pmset -g assertions` showed nothing for the collector. So the M0 laptop collector was never actually protected from idle sleep.
+- **Fix:** Launch through `/bin/sh -c 'caffeinate -i -w $$ & exec python -m src.collector.run'`. `caffeinate -w <pid>` holds the assertion until that PID exits, and `exec` turns the shell into the collector with the same PID. Verified with `pmset -g assertions`: "caffeinate asserting on behalf of Process ID <collector pid>".
+- **Still true:** Closing the lid sleeps the Mac anyway. The backup runner covers that.
+
+## 2026-10-06: launchd agent for the laptop collector
+
+- **Options:** A `nohup` background process, a launchd agent, or a cron job.
+- **Choice:** launchd agent (`ops/rtd-collector.plist.template`, installed by `ops/install_collector_agent.sh`).
+- **Reason:** launchd is the macOS service manager. `KeepAlive` restarts the collector within 30 seconds if it exits, and `RunAtLoad` starts it again at login after a reboot. Tested: killing the process led to a new PID and polling resumed.
+
+## 2026-10-06: GitHub Actions runner as a backup, not a second always-on collector
+
+- **Options:** (a) GitHub Actions collects all the time alongside the laptop. (b) GitHub Actions collects only when the laptop is not delivering. (c) No backup.
+- **Choice:** (b). Every 15 minutes the workflow runs `src/collector/freshness.py`. If the newest snapshot in the volume is under 5 minutes old, it exits. If not, it collects for 55 minutes.
+- **Reason:** A laptop sleeps when the lid closes. (a) would double every upload for no gain and spend about 24 runner-hours a day. (b) costs about 30 seconds per check while the laptop is healthy. The `concurrency` group stops two backup runs from overlapping.
+- **Known limits:** GitHub can delay scheduled runs by several minutes or more under load, so a laptop outage can still leave a gap of about 15 to 30 minutes before the backup starts. Gaps are measured with `python -m src.collector.health --volume` and documented.
+- **Auth:** The runner needs a Databricks personal access token in the repo secret `DATABRICKS_TOKEN` (plus `DATABRICKS_HOST`). The token is created by the user and never written to the repo. A service principal with OAuth would be cleaner. Revisit in M6 if Free Edition allows it.
