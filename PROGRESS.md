@@ -2,6 +2,19 @@
 
 ## Current milestone
 
+M6, CI/CD and write-up (branch `m6-polish`). M1 to M5 merged to `main` through PRs #2 to #6 on 2026-10-08, each after CI passed. M1 was merged before its 48-hour condition so the backup runner could run from `main` (see `docs/decisions.md`).
+
+M6 remaining:
+- [x] `deploy.yml`: deploy prod on push to `main` after lint and tests.
+- [x] `ci.yml`: bundle validate on pull requests (when secrets exist).
+- [x] README rewrite, `docs/results.md` findings and paid-compute section.
+- [ ] GitHub secrets (user) so the backup collector and deploy workflow run.
+- [ ] Dashboard screenshots and a demo GIF (needs Chrome signed in to the workspace).
+- [ ] Pin the repo on the GitHub profile (user).
+- [ ] Final results after the 2026-10-27 retrain.
+
+Previous:
+
 M5, scoring and dashboard (branch `m5-scoring`, stacked on `m4-model`). Deployed to prod. "Done when" (dashboard updates on its own after a scheduled run) is waiting for the next scheduled prod run, plus a visual check of the dashboard in the workspace.
 
 - Prod dashboard: https://dbc-5b0fa231-e20d.cloud.databricks.com/dashboardsv3/01f1c1d682841d109d9a2ea5d7029325/published?w=7474646683731620
@@ -28,6 +41,11 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 - **M1 "Done when" check:** 48 hours of continuous data, earliest 2026-10-08 09:00 UTC.
 
 ## Collector health (last check)
+
+- 2026-10-08 06:00 UTC: 45 hours collected since 2026-10-06 08:57 UTC, 21 gaps over 5 minutes, 12.2 hours missing (uptime 72.8%). On 2026-10-07: 17 gaps between 01:29 and 18:39 UTC, about 9 hours, all laptop sleep. No gaps from 18:39 UTC to 06:00 UTC on 2026-10-08.
+- M5 check: every scheduled prod run since 2026-10-06 23:49 UTC appended predictions and refreshed live vehicles (16 batches by 05:48 UTC on 2026-10-08).
+
+Earlier:
 
 - 2026-10-06 21:26 UTC: 566 snapshots per feed since 08:57:37 UTC. **4 gaps over 5 minutes, about 3 hours in total.** Cause: the Mac slept with the lid closed (`pmset -g log` shows "Clamshell" sleep at 13:25 UTC). The collector itself never crashed. The backup runner was not active yet (no GitHub secrets).
 
@@ -154,3 +172,8 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 ### 2026-10-06 (late night): M5
 - Done: live scoring with shared feature code, monitoring, live vehicles, dashboard JSON and bundle resource, M5 docs. Dev score run succeeded; prod deployed.
 - Next: check the dashboard visually; confirm the next scheduled prod run updates it; GitHub secrets for the backup collector (still open).
+
+### 2026-10-08: merges and M6
+- Merged M1 to M5 (PRs #2 to #6) after CI. Deleted the feature branches.
+- Added deploy and bundle-validate workflows, rewrote the README, added findings to `docs/results.md`, M6 docs.
+- Open: GitHub secrets, dashboard screenshots/GIF, pinning the repo, 48-hour gap-free check, full retrain 2026-10-27.
