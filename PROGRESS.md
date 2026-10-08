@@ -2,6 +2,10 @@
 
 ## Current milestone
 
+M2, bronze and silver (branch `m2-bronze-silver`, stacked on `m1-collector`). Verified end to end on one day in the dev target. Waiting on: user OK to deploy the prod target with its 2-hour schedule (that is the M2 "Done when").
+
+Previous:
+
 M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets for the backup runner, then 48 hours of data with no gaps over 5 minutes.
 
 ## Key dates
@@ -12,7 +16,16 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 
 ## Collector health (last check)
 
-- 2026-10-06 09:19 UTC: continuous since 08:57:37 UTC, no gaps over 5 minutes. Local and volume counts match.
+- 2026-10-06 21:26 UTC: 566 snapshots per feed since 08:57:37 UTC. **4 gaps over 5 minutes, about 3 hours in total.** Cause: the Mac slept with the lid closed (`pmset -g log` shows "Clamshell" sleep at 13:25 UTC). The collector itself never crashed. The backup runner was not active yet (no GitHub secrets).
+
+| Gap (UTC, 2026-10-06) | Length | Cause |
+|---|---|---|
+| 13:24 to 14:12 | 48 min | lid closed, Mac asleep |
+| 14:12 to 14:30 | 18 min | Mac asleep (dark wakes only) |
+| 14:32 to 15:26 | 54 min | Mac asleep |
+| 19:40 to 20:44 | 64 min | Mac asleep |
+
+- The M1 "48 hours with no gap over 5 minutes" clock restarts after the backup runner is active.
 - Laptop: launchd agent `com.rtd-delay-radar.collector` (auto-restart, `caffeinate -w` keeps the Mac from idle sleep). Log at `data/logs/collector.log`.
 - Check: `uv run python -m src.collector.health --volume --days 3`.
 - Stop: `launchctl bootout gui/$(id -u)/com.rtd-delay-radar.collector`. Start again: `sh ops/install_collector_agent.sh`.
@@ -29,6 +42,16 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 - [x] Unit tests (25 total).
 - [ ] 48 hours of continuous data with no gaps over 5 minutes (earliest 2026-10-08 09:00 UTC).
 - [x] `docs/architecture.md` and `docs/interview_prep.md` M1 entries.
+
+## M2 checklist
+
+- [x] Bronze: Auto Loader binaryFile, `from_protobuf` decode, availableNow, checkpoints in `rtd.landing.checkpoints`.
+- [x] Static GTFS (routes, stops, trips, stop_times, calendar) uploaded by version and loaded as silver materialized views.
+- [x] Silver pipeline: dedupe, type casts, schedule join, DST-safe delay, RTD start_date correction.
+- [x] Expectations with pass rates (dev run on 2026-10-06): trip_id, delay ±2h, schedule match 100%; date correction 99.93%; vehicle position in Denver area 99.88%.
+- [x] Unit tests (52) including a Spark vs Python decoder cross-check on real snapshots.
+- [x] `docs/architecture.md` and `docs/interview_prep.md` M2 entries.
+- [ ] Deploy prod target and confirm one scheduled run (needs user OK, first prod run reads all history so far).
 
 ## First-time setup checklist
 
@@ -62,3 +85,10 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
   - Closing the lid still sleeps the Mac. The backup runner covers it once secrets are added.
   - Java runtime missing for local Spark tests (decide before M2).
   - Watch for the `Errno 5` workspace file read error in M2. Fallback is packaging `src/` as a wheel.
+
+### 2026-10-06 (later): M2
+- Done: bronze and silver code, bundle job and pipeline, verified on one day in dev.
+- Problems fixed along the way: Python UDF out of memory (switched to `from_protobuf`), pipeline could not import `src` (added `rtd.code_root` to `sys.path`), duplicate `stop_id` column, RTD start_date one day behind for early trips, RTD static download rejected Python's default User-Agent.
+- Quota note: the first failed silver run retried itself for about 12 minutes. Retries are now off (`pipelines.numUpdateRetryAttempts: 0`).
+- Size note: one day is about 15 million silver stop update rows. Three weeks is roughly 300 million. Gold (M3) should reduce this to one row per trip and stop.
+- Next: user OK for prod deploy, then M3 once M1 is merged.

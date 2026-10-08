@@ -4,27 +4,39 @@ Real-time transit delay prediction for Denver RTD on Databricks Free Edition and
 
 A streaming lakehouse that ingests live RTD GTFS-Realtime feeds, builds bronze, silver, and gold Delta tables, and trains a model that predicts stop-level arrival delays.
 
-**Status:** M0 complete. M1 (collector) code complete, waiting on 48 hours of continuous data. The collector has been running since 2026-10-06. See [PROGRESS.md](PROGRESS.md) and [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status:** M0 complete. M1 (collector) waiting on 48 hours of continuous data. M2 (bronze and silver) verified on one day in the dev target. The collector has been running since 2026-10-06. See [PROGRESS.md](PROGRESS.md) and [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 ## Architecture
 
 ```
-RTD GTFS-RT feeds --> collector (laptop, every 60 s) --> /Volumes/rtd/landing/raw/
-                                                              |
-                         bronze --> silver --> gold --> model  (Databricks, hourly bursts; coming in M2+)
+RTD GTFS-RT feeds --> collector (laptop + GitHub Actions backup, every 60 s)
+                          |
+                          v
+             /Volumes/rtd/landing/raw/  (raw .pb files, UTC date/hour folders)
+                          |  Auto Loader + from_protobuf, availableNow, every 2 h
+                          v
+             rtd.bronze.*  (one row per feed entity)
+                          |  Lakeflow Declarative Pipeline + expectations
+                          v
+             rtd.silver.*  (stop updates with scheduled delay, vehicles, alerts, static GTFS)
+                          |
+                          v
+             gold, model, dashboard  (M3 to M5)
 ```
 
 Details and reasoning: [docs/architecture.md](docs/architecture.md). Design choices: [docs/decisions.md](docs/decisions.md).
 
 ## Setup
 
-Requires Python 3.11, [uv](https://docs.astral.sh/uv/), and the [Databricks CLI](https://docs.databricks.com/dev-tools/cli/install.html).
+Requires Python 3.11, [uv](https://docs.astral.sh/uv/), the [Databricks CLI](https://docs.databricks.com/dev-tools/cli/install.html), and Java 17 for local Spark tests.
 
 ```bash
 uv sync                                    # install dependencies
 databricks auth login --host <workspace>   # browser OAuth, no tokens in files
 uv run python -m src.common.setup_catalog  # create catalog rtd, schemas, raw volume (once)
-databricks bundle deploy                   # deploy jobs to the dev target
+uv run python -m src.collector.static_gtfs # upload the static GTFS schedule (once per schedule change)
+databricks bundle deploy                   # deploy jobs and the pipeline to the dev target
+databricks bundle run rtd_refresh          # dev: bronze + silver on one day of data
 ```
 
 Run the collector:

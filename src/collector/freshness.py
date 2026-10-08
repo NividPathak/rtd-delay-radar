@@ -21,9 +21,7 @@ CHECK_FEED = "trip_updates"
 def recent_hour_dirs(feed: str, now: datetime) -> list[str]:
     """Volume folders for the current and previous UTC hour."""
     hours = [now - timedelta(hours=1), now]
-    return [
-        f"{config.RAW_VOLUME_PATH}/feed={feed}/date={h:%Y-%m-%d}/hour={h:%H}" for h in hours
-    ]
+    return [f"{config.RAW_VOLUME_PATH}/feed={feed}/date={h:%Y-%m-%d}/hour={h:%H}" for h in hours]
 
 
 def latest_volume_timestamp(client: WorkspaceClient, feed: str, now: datetime) -> int | None:

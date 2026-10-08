@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 def http_get(url: str, timeout: float = config.HTTP_TIMEOUT_SECONDS) -> bytes:
-    """Return the body of a GET request to `url`."""
-    with urllib.request.urlopen(url, timeout=timeout) as response:
+    """Return the body of a GET request to `url`, identifying this project in the User-Agent."""
+    request = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return response.read()
 
 

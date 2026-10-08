@@ -1,0 +1,20 @@
+# Silver layer: Lakeflow Declarative Pipeline on serverless compute.
+resources:
+  pipelines:
+    rtd_silver:
+      name: rtd_silver
+      catalog: ${var.catalog}
+      schema: ${var.schema_prefix}silver
+      serverless: true
+      root_path: ../src/pipelines
+      libraries:
+        - glob:
+            include: ../src/pipelines/transformations/**
+      configuration:
+        rtd.bronze_schema: ${var.catalog}.${var.schema_prefix}bronze
+        rtd.static_path: /Volumes/${var.catalog}/landing/raw/static
+        # Deployed repo root. silver.py adds it to sys.path so `import src...` works.
+        rtd.code_root: ${workspace.file_path}
+        # Fail fast instead of retrying a broken update several times (protects quota).
+        pipelines.numUpdateRetryAttempts: "0"
+        pipelines.maxFlowRetryAttempts: "1"

@@ -1,0 +1,33 @@
+# Bronze (Auto Loader, availableNow) then the silver pipeline.
+# Runs every 2 hours in prod. Development mode pauses the schedule on the dev target.
+resources:
+  jobs:
+    rtd_refresh:
+      name: rtd_refresh
+      trigger:
+        periodic:
+          interval: 2
+          unit: HOURS
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: bronze
+          python_wheel_task:
+            package_name: rtd_delay_radar
+            entry_point: rtd-bronze
+            parameters:
+              - "--schema-prefix"
+              - "${var.schema_prefix}"
+              - "--date"
+              - "${var.dev_date}"
+          environment_key: default
+        - task_key: silver
+          depends_on:
+            - task_key: bronze
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.rtd_silver.id}
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "5"
+            dependencies:
+              - ../dist/*.whl

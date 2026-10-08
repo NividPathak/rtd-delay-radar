@@ -66,3 +66,49 @@ GitHub Actions (every 15 min):                            |
 - **Backup, not duplicate.** Running both all the time would upload every file twice. Checking freshness first means GitHub only works when it is needed.
 - **Uploads are idempotent.** If both runners happen to save the same snapshot, the file name is identical (`<feed>_<header timestamp>.pb`) and the second upload just overwrites the first. No duplicates downstream.
 - **Gaps are measured, not hidden.** Lid-closed sleep and GitHub schedule delays can still leave short gaps. The health report finds them, and they are listed in PROGRESS.md and later in the README.
+
+## M2. Bronze and silver
+
+### What exists now
+
+```
+/Volumes/rtd/landing/raw/feed=*/...pb
+      |  rtd_refresh job, task 1: bronze (Auto Loader, availableNow)
+      v
+rtd.bronze.trip_updates | vehicle_positions | alerts        one row per feed entity
+      |  rtd_refresh job, task 2: rtd_silver pipeline (Lakeflow, serverless)
+      v
+rtd.silver.stop_time_updates    one row per trip, stop, snapshot; scheduled vs predicted delay
+rtd.silver.vehicle_positions    deduplicated, in_service flag
+rtd.silver.alerts               one row per alert and affected route/stop, first/last seen
+rtd.silver.gtfs_*               static schedule (latest version): routes, stops, scheduled stops
+```
+
+The `dev` bundle target runs the same code against `rtd.dev_bronze` and `rtd.dev_silver`, and only reads one day of files.
+
+### Bronze, step by step
+
+1. **Auto Loader** (`cloudFiles`, format `binaryFile`) lists new `.pb` files in the volume. The checkpoint in `/Volumes/rtd/landing/checkpoints/` remembers which files were already loaded, so every file is ingested exactly once.
+2. **`from_protobuf`** decodes each file into a `FeedMessage` struct inside the JVM. The protobuf schema comes from the `gtfs-realtime-bindings` package.
+3. **Explode** the entities, keep each feed's fields with explicit types, and add `source_file` and `ingest_ts`.
+4. **`trigger(availableNow=True)`** processes everything new, then stops. The job runs every 2 hours.
+
+### Silver, step by step
+
+1. **Static schedule.** Read the static GTFS files from the volume, keep the newest version, and build `gtfs_scheduled_stops`: one row per trip and stop with the scheduled time in seconds, the route, the direction, and bus or rail.
+2. **Stop updates.** Explode each trip update into one row per stop, drop repeats of the same (trip, stop, snapshot), and join to the schedule on (trip_id, stop_sequence).
+3. **Delay.** Scheduled time = (noon local time on the service date, minus 12 hours) + the GTFS time offset. That is the GTFS definition, and it stays correct on daylight saving days. Delay = RTD's predicted arrival minus the scheduled arrival.
+4. **RTD's date bug.** For early-morning trips, RTD's trip update `start_date` is one day behind. The pipeline detects the whole-day offset, corrects it, and records the correction in `service_date_shift_days`.
+5. **Expectations** drop rows with a missing trip or vehicle id, a delay outside ±2 hours, or a position outside the Denver area. Two warn-only expectations count unmatched schedule rows and date corrections. All pass rates are in the pipeline event log.
+
+### First results on one day (2026-10-06, dev target)
+
+- 7.7 million stop update rows from about 12 hours of snapshots. Every row matched the schedule. 0.07% needed the date correction.
+- Delay of RTD's *prediction* against the schedule: bus median 3 s (p90 178 s), rail median 64 s (p90 224 s). These are predictions, not observed arrivals. Actual-arrival labels are built in M3.
+
+### Why it is built this way
+
+- **Why `availableNow` instead of an always-on stream.** An always-on stream keeps serverless compute running 24 hours a day, and the Free Edition quota would run out. `availableNow` uses the same Structured Streaming code, checkpoints, and exactly-once guarantees, but runs in bursts: process everything new, then shut down. The cost is freshness. Data is up to 2 hours old, which is fine for training a model.
+- **Why bronze is a job and silver is a pipeline.** Bronze needs `from_protobuf` and file-level control of Auto Loader, which is plain Structured Streaming. Silver is mostly joins, deduplication, and quality rules, which is what Lakeflow pipelines do well: they manage dependencies between tables and record expectation results without extra code.
+- **Why not a Python UDF for parsing.** It was the first version. On daytime snapshots it ran out of memory in the serverless Python sandbox. `from_protobuf` runs in the JVM and handles them easily.
+- **Why the transformations are plain functions.** Every silver step is a function that takes and returns DataFrames, tested on a local Spark session with real RTD snapshots. The pipeline file only wires them together, so almost all logic is tested without touching Databricks.
