@@ -18,3 +18,23 @@ jobs:
       - run: uv sync --python 3.11
       - run: uv run ruff check
       - run: uv run pytest -q
+      - name: Check secrets
+        id: secrets
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          if [ -z "$DATABRICKS_HOST" ] || [ -z "$DATABRICKS_TOKEN" ]; then
+            echo "Databricks secrets not set, skipping bundle validate."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: databricks/setup-cli@main
+        if: steps.secrets.outputs.ok == 'true'
+      - name: Validate bundle
+        if: steps.secrets.outputs.ok == 'true'
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: databricks bundle validate -t prod
