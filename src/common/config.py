@@ -60,3 +60,13 @@ def table_name(schema: str, table: str, schema_prefix: str = "") -> str:
 # arrival, but only if that prediction was made at most this many seconds before arrival.
 LABEL_MAX_LEAD_SECONDS = 120
 LATE_THRESHOLD_SECONDS = 5 * 60
+
+# ML problem setup.
+HORIZONS = [1, 5, 10, 20]  # stops ahead
+TREND_STOPS = 3
+HIST_DAYS = 7
+TEST_DAYS = 7
+MIN_DAYS_FOR_RESULTS = 21
+# US federal holidays in the collection window (no extra dependency for a short list).
+HOLIDAYS = ["2026-10-12", "2026-11-11", "2026-11-26", "2026-12-25", "2027-01-01"]
+MODEL_NAME = f"{CATALOG}.ml.delay_model"

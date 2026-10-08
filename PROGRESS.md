@@ -2,6 +2,10 @@
 
 ## Current milestone
 
+M4, features and model (branch `m4-model`, stacked on `m3-gold`). Code complete and pipeline-tested in dev. **No results until the full retrain.** "Done when" (results table on a held-out week vs both baselines) needs 3 weeks of data.
+
+Previous:
+
 M3, gold (branch `m3-gold`, stacked on `m2-bronze-silver` and `m1-collector`). Code done and verified in dev. Prod is deployed with a 2-hour schedule (first run succeeded in 5.8 min). Prod gold is waiting on the next scheduled run after a Free Edition `RESOURCE_EXHAUSTED` error.
 
 Previous:
@@ -9,6 +13,9 @@ Previous:
 M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets for the backup runner, then 48 hours of data with no gaps over 5 minutes.
 
 ## Key dates
+
+- **Full retrain command (run on or after 2026-10-27):**
+  `databricks bundle run -t prod rtd_train --params start=2026-10-06,end=2026-10-27`
 
 - **Collector started:** 2026-10-06 08:57 UTC (02:57 Denver).
 - **Earliest full retrain:** 2026-10-27 (collector start + 21 days), only if collection has no long gaps. Any model before then is a pipeline test tagged `data_status=preliminary`.
@@ -42,6 +49,18 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 - [x] Unit tests (25 total).
 - [ ] 48 hours of continuous data with no gaps over 5 minutes (earliest 2026-10-08 09:00 UTC).
 - [x] `docs/architecture.md` and `docs/interview_prep.md` M1 entries.
+
+## M4 checklist
+
+- [x] `gold.training_set` builder: anchor stop to K stops ahead (1, 5, 10, 20), features known at `t0`, both baselines.
+- [x] Leakage check for every feature in `docs/decisions.md`, with unit tests for the as-of joins.
+- [x] Time split by service date, MAE/RMSE by mode and horizon, preliminary flag (< 21 days or < 7 held-out days).
+- [x] Linear and GBT (residual over persistence), MLflow logging with date range and git commit, UC registration without champion for preliminary runs.
+- [x] `rtd_train` job (features then train), one command with a date range.
+- [x] `notebooks/error_analysis.py` and `gold.test_predictions`.
+- [x] Pipeline test in dev (2026-10-06 only): baselines logged as preliminary, models skipped (no training days). Feature coverage checked; `alert_active` narrowed to route-wide alerts.
+- [ ] Full retrain on 3 weeks with a held-out week (2026-10-27 earliest).
+- [ ] Champion alias only after that run.
 
 ## M3 checklist
 
@@ -107,3 +126,9 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 - Done: gold transforms with tests, gold views in the pipeline, EDA notebook, docs. Dev gold verified.
 - Prod: first scheduled-target run succeeded (5.8 min). The prod gold update then failed with `RESOURCE_EXHAUSTED` because the SQL warehouse was still running. Warehouse stopped, nothing retried.
 - Next: confirm the next scheduled prod run builds gold; answer the 5 pm query once a gap-free weekday afternoon is collected; GitHub secrets for the backup collector (still the top priority for data quality).
+
+### 2026-10-06 (night): M4
+- Done: training set builder with as-of joins, evaluation, models, training job, error analysis notebook, M4 docs. Pipeline test in dev passed end to end.
+- Found: `alert_active` was 1 for 83% of examples because of stop-level construction alerts. Narrowed to route-wide alerts.
+- Corrected: the evening `RESOURCE_EXHAUSTED` was my manual run colliding with the first scheduled prod run, which succeeded and built prod gold.
+- Next: daily pipeline tests as days accumulate (first model training possible once there are 2+ service dates); GitHub secrets for the backup collector; full retrain on 2026-10-27.

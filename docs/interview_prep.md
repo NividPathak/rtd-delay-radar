@@ -69,3 +69,20 @@ A trip-stop's label changes until the vehicle passes the stop. A streaming table
 
 **5. How would you answer "which route is latest at 5 pm on weekdays"?**
 One query on `gold.route_delay_hourly`: filter `is_weekday` and `hour_local = 17`, take the arrival-weighted average delay per route, and require a minimum number of arrivals so a route with three trips does not top the list.
+
+## M4. Features and model
+
+**1. Why did you split train and test by time and not randomly?**
+Delays on the same day are correlated (weather, incidents, events). A random split puts trips from the same day in both sets, so the model can effectively memorise the day and the test score looks better than real use. Splitting by service date tests the model only on days it has never seen.
+
+**2. How did you make sure no feature leaks the future?**
+Every example has a prediction time `t0`. Each feature is defined as "the latest value known before `t0`". The tricky ones (the vehicle ahead, RTD's prediction, alerts, 7-day history) use as-of joins or exclude the current day, and each has a unit test where future data is present and must be ignored. The full table is in `docs/decisions.md`.
+
+**3. What are your baselines and why two?**
+Persistence: the delay stays what it is now. It is simple and strong. RTD's own prediction: what riders already see in the app. Beating persistence shows the model learned something. Comparing with RTD shows whether it is useful in practice.
+
+**4. Why does your model predict the change in delay?**
+So that a model that learns nothing collapses to persistence instead of something worse. It also makes the target smaller and better behaved, which helps the linear model.
+
+**5. You only had one day of data when you built this. What did you do?**
+I built and tested the whole pipeline but did not report any number. The code marks runs with under 21 days or no full held-out week as preliminary, tags them in MLflow, and never gives them the champion alias. The first real results come from the retrain on 2026-10-27.

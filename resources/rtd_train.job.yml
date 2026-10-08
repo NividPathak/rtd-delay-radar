@@ -1,0 +1,54 @@
+# Build the training set, then train and evaluate. Not scheduled: run it on purpose.
+#   databricks bundle run -t prod rtd_train --params start=2026-10-06,end=2026-10-27
+# Empty start/end means every service date available.
+resources:
+  jobs:
+    rtd_train:
+      name: rtd_train
+      max_concurrent_runs: 1
+      parameters:
+        - name: start
+          default: ""
+        - name: end
+          default: ""
+      tasks:
+        - task_key: build_features
+          python_wheel_task:
+            package_name: rtd_delay_radar
+            entry_point: rtd-build-features
+            parameters:
+              - "--start"
+              - "{{job.parameters.start}}"
+              - "--end"
+              - "{{job.parameters.end}}"
+              - "--schema-prefix"
+              - "${var.schema_prefix}"
+          environment_key: default
+        - task_key: train
+          depends_on:
+            - task_key: build_features
+          python_wheel_task:
+            package_name: rtd_delay_radar
+            entry_point: rtd-train
+            parameters:
+              - "--start"
+              - "{{job.parameters.start}}"
+              - "--end"
+              - "{{job.parameters.end}}"
+              - "--schema-prefix"
+              - "${var.schema_prefix}"
+              - "--git-sha"
+              - "${bundle.git.commit}"
+          environment_key: ml
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "5"
+            dependencies:
+              - ../dist/*.whl
+        - environment_key: ml
+          spec:
+            environment_version: "5"
+            dependencies:
+              - ../dist/*.whl
+              - mlflow

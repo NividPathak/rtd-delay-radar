@@ -11,13 +11,15 @@ dependencies = [
 
 [project.scripts]
 rtd-bronze = "src.bronze.ingest:main"
+rtd-build-features = "src.features.build:main"
+rtd-train = "src.ml.train:main"
 
 [dependency-groups]
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
     # Local Spark for unit tests only. Serverless compute provides its own Spark.
-    "pyspark>=4.0,<4.1",
+    "pyspark[ml]>=4.0,<4.1",
 ]
 
 [build-system]

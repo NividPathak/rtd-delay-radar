@@ -152,4 +152,50 @@ Each entry: the options, the choice, the reason.
 
 - **What happened:** The prod pipeline update failed at startup with `RESOURCE_EXHAUSTED: You've hit the limit for serverless compute for free usage. Stop or delete existing serverless compute to free up capacity.` At that moment the SQL warehouse (used for label checks) was still running, and a dev pipeline update had just finished. Nothing was retried, per the quota rule.
 - **Reading:** Free Edition caps how much serverless compute can run at once, separate from the daily quota. Running a dev pipeline, a prod job, and the SQL warehouse close together hits it.
+- **Correction (later the same evening):** The job history shows the first *scheduled* prod run started at 21:48 UTC, the same minute as my manual prod pipeline update. So the collision was mainly my manual run against the scheduler. That scheduled run succeeded and built prod gold.
 - **Rules from now on:** Run one Databricks workload at a time. Stop the SQL warehouse right after ad hoc queries (`databricks warehouses stop`). Never start dev runs while a prod run is in progress. If the scheduled job keeps hitting this limit, move it from every 2 hours to every 3 hours and record that here.
+
+## 2026-10-06: The prediction problem, exactly
+
+- **Example:** a vehicle has just reached stop A on trip T. The prediction time `t0` is when that arrival became known in our data: the later of the observed arrival and the last snapshot that still listed stop A.
+- **Label:** the observed delay at stop A+K (K scheduled stops later on the same trip), for K in {1, 5, 10, 20}. Only targets whose arrival is after `t0` are kept.
+- **Model target:** the change in delay from A to A+K (the residual over persistence). The prediction is current delay + predicted change, so a model that learns nothing falls back to persistence.
+
+## 2026-10-06: Leakage check for every feature
+
+Each feature must be computable at `t0` from data that existed at `t0`. Unit tests in `tests/unit/test_training_set.py` cover the starred items with cases where future data is present and must be ignored.
+
+| Feature | Source | Why it does not leak |
+|---|---|---|
+| `current_delay_s` | delay at anchor stop A | A's arrival defines `t0`. It is known by definition. |
+| `delay_trend_s` | delay at A minus delay 3 observed stops earlier | Earlier stops were reached before A. |
+| route, direction, mode, `anchor_stop_sequence`, `horizon` | trip and schedule | Fixed before the trip starts. |
+| `stops_remaining`, `scheduled_gap_s` | static schedule | Published in advance. |
+| `hour_local`, `day_of_week`, `is_weekend`, `is_holiday` | clock time at `t0` | Calendar facts. |
+| `hist_avg_delay_s`, `hist_n` * | observed delays for the target's route, stop, and hour over the 7 previous service dates | The current service date is excluded, so no same-day arrivals (some of which are after `t0`) are used. Test: today's value is ignored. |
+| `ahead_delay_s`, `ahead_age_s` * | most recent other vehicle on the same route and direction at the target stop | As-of join on `known_ts < t0`. Ties sort the example first, so an arrival known at exactly `t0` is not used. Test: a later vehicle's delay is ignored. |
+| `alert_active` * | silver.alerts | Alert must have been in the feed at `t0` (`first_seen_ts <= t0 <= last_seen_ts`). Test: an alert first seen after `t0` does not count. |
+| `rtd_pred_s` (baseline, not a feature) * | RTD's prediction for stop A+K | Latest snapshot with `feed_ts <= t0`. Test: a snapshot after `t0` is ignored. |
+
+- **Not used as features:** anything from the target row other than the label, any snapshot after `t0`, and the target's observed arrival.
+- **Split:** by service date. Train on earlier dates, test on the last 7. Never random, never shuffled. Rows from one trip never appear in both sets, because a trip belongs to one service date.
+- **Remaining risk:** the 7-day history uses `is_observed` labels from earlier days. Those were computed with full knowledge of those days, which is fine because those days are entirely in the past at `t0`.
+
+## 2026-10-06: Models and tuning
+
+- **Models:** Spark ML `LinearRegression` (one-hot route and mode, L2 penalty 0.1) and `GBTRegressor` (depth 4 and 6, 50 trees). Both predict the residual over persistence.
+- **Why Spark ML:** serverless environment version 4+ supports `pyspark.ml` and `mlflow.spark`, and it is in the approved stack. Serverless caps a model at 100 MB, which these trees stay well under.
+- **Tuning:** a deliberately small grid (two tree depths). Choosing among them on the test week is a mild form of test-set reuse. When there is enough data, the plan is to hold out the last week of the training period as validation and keep the test week untouched. That needs at least 3 weeks of data.
+- **Missing values:** filled explicitly (0, or 3600 s for "no vehicle ahead") with `has_hist` and `has_ahead` flags so the model can tell a real 0 from a missing value.
+
+## 2026-10-06: When results count
+
+- `src/ml/evaluate.py` marks a run preliminary when there are fewer than 21 days of data or the held-out window is shorter than 7 days. Preliminary runs are tagged `data_status=preliminary` in MLflow, the model version gets the same tag, and it never gets the `champion` alias.
+- With a single service date there are no training days at all. The job then logs the baselines and skips the models instead of training on nothing.
+- Earliest full retrain: **2026-10-27** (collector start 2026-10-06 plus 21 days), and only if collection gaps are small by then.
+
+## 2026-10-06: `alert_active` counts only route-wide alerts
+
+- **Found in the first training set (dev, one day):** `alert_active` was 1 for about 83% of examples. RTD keeps more than 100 long-running alerts, most of them single-stop closures for construction, so nearly every route always "had an alert". A flag that is almost always on carries little signal.
+- **Choice:** Count only alerts whose informed entity names the route but no specific stop (route-wide: detours, reduced service). A stop-level feature at the target stop could be added later if error analysis shows alerts matter.
+- **Other coverage on the same day:** RTD prediction available for 100% of examples, vehicle ahead about 92%, delay trend about 89%, 7-day history 0% (it needs earlier days).
