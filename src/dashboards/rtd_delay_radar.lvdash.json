@@ -54,7 +54,8 @@
       "name": "ds_mon_daily",
       "displayName": "Error over time",
       "queryLines": [
-        "SELECT service_date, predictor, round(sum(mae_s * n) / sum(n), 1) AS mae_s\n",
+        "SELECT date_format(service_date, 'yyyy-MM-dd') AS service_day, predictor,\n",
+        "       round(sum(mae_s * n) / sum(n), 1) AS mae_s\n",
         "FROM prediction_monitoring\n",
         "GROUP BY service_date, predictor\n",
         "ORDER BY service_date\n"
@@ -485,8 +486,8 @@
                   "datasetName": "ds_mon_daily",
                   "fields": [
                     {
-                      "name": "service_date",
-                      "expression": "`service_date`"
+                      "name": "service_day",
+                      "expression": "`service_day`"
                     },
                     {
                       "name": "mae_s",
@@ -506,10 +507,13 @@
               "widgetType": "line",
               "encodings": {
                 "x": {
-                  "fieldName": "service_date",
+                  "fieldName": "service_day",
                   "displayName": "Service date",
                   "scale": {
-                    "type": "temporal"
+                    "type": "categorical",
+                    "sort": {
+                      "by": "natural-order"
+                    }
                   }
                 },
                 "y": {
