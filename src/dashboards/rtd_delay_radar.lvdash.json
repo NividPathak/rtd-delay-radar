@@ -1,0 +1,614 @@
+{
+  "datasets": [
+    {
+      "name": "ds_live",
+      "displayName": "Live vehicles",
+      "queryLines": [
+        "SELECT route_short_name, mode, latitude, longitude, delay_min\n",
+        "FROM live_vehicles\n",
+        "WHERE delay_min IS NOT NULL\n"
+      ]
+    },
+    {
+      "name": "ds_kpi",
+      "displayName": "Now: summary",
+      "queryLines": [
+        "SELECT date_format(from_utc_timestamp(max(vehicle_ts), 'America/Denver'), 'yyyy-MM-dd HH:mm') AS data_as_of,\n",
+        "       count(*) AS vehicles,\n",
+        "       round(avg(delay_min), 1) AS avg_delay_min,\n",
+        "       round(100 * avg(CAST(delay_min > 5 AS INT)), 1) AS pct_late_5min\n",
+        "FROM live_vehicles\n"
+      ]
+    },
+    {
+      "name": "ds_worst",
+      "displayName": "Worst routes now",
+      "queryLines": [
+        "SELECT route_short_name AS route, mode, count(*) AS vehicles, round(avg(delay_min), 1) AS avg_delay_min\n",
+        "FROM live_vehicles\n",
+        "WHERE delay_min IS NOT NULL\n",
+        "GROUP BY route_short_name, mode\n",
+        "HAVING count(*) >= 2\n",
+        "ORDER BY avg_delay_min DESC\n",
+        "LIMIT 15\n"
+      ]
+    },
+    {
+      "name": "ds_pva",
+      "displayName": "Prediction vs actual (last 2 days, sample)",
+      "queryLines": [
+        "SELECT p.predictor, p.horizon,\n",
+        "       round(p.predicted_delay_s / 60, 2) AS predicted_min,\n",
+        "       round(a.delay_s / 60, 2) AS actual_min\n",
+        "FROM delay_predictions p\n",
+        "JOIN stop_arrivals a\n",
+        "  ON p.service_date = a.service_date AND p.trip_id = a.trip_id\n",
+        " AND p.target_stop_sequence = a.stop_sequence\n",
+        "WHERE a.is_observed\n",
+        "  AND p.service_date >= date_sub(current_date(), 2)\n",
+        "  AND abs(a.delay_s) < 3600\n",
+        "LIMIT 3000\n"
+      ]
+    },
+    {
+      "name": "ds_mon_daily",
+      "displayName": "Error over time",
+      "queryLines": [
+        "SELECT service_date, predictor, round(sum(mae_s * n) / sum(n), 1) AS mae_s\n",
+        "FROM prediction_monitoring\n",
+        "GROUP BY service_date, predictor\n",
+        "ORDER BY service_date\n"
+      ]
+    },
+    {
+      "name": "ds_mon_horizon",
+      "displayName": "Error by horizon",
+      "queryLines": [
+        "SELECT predictor, concat(CAST(horizon AS STRING), ' stops') AS horizon_label, horizon,\n",
+        "       round(sum(mae_s * n) / sum(n), 1) AS mae_s\n",
+        "FROM prediction_monitoring\n",
+        "GROUP BY predictor, horizon\n",
+        "ORDER BY horizon\n"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "overview",
+      "displayName": "Overview",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## RTD Delay Radar\n",
+                "\n",
+                "Live Denver RTD bus and rail delays. Data refreshes in scheduled bursts every 2 hours (Databricks Free Edition, `availableNow` streaming), so \"now\" means the latest refresh. Model predictions appear after the first full-data retrain (earliest 2026-10-27); until then only the persistence and RTD baselines are shown."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_asof",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpi",
+                  "fields": [
+                    {
+                      "name": "data_as_of",
+                      "expression": "`data_as_of`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "data_as_of",
+                  "displayName": "Data as of (Denver time)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Data as of (Denver time)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_vehicles",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpi",
+                  "fields": [
+                    {
+                      "name": "vehicles",
+                      "expression": "`vehicles`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "vehicles",
+                  "displayName": "Vehicles in service"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Vehicles in service"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 2,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_delay",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpi",
+                  "fields": [
+                    {
+                      "name": "avg_delay_min",
+                      "expression": "`avg_delay_min`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg_delay_min",
+                  "displayName": "Average delay (min)"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Average delay (min)"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 2,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_late",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_kpi",
+                  "fields": [
+                    {
+                      "name": "pct_late_5min",
+                      "expression": "`pct_late_5min`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "pct_late_5min",
+                  "displayName": "% more than 5 min late"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "% more than 5 min late"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 2,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "map_live",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_live",
+                  "fields": [
+                    {
+                      "name": "latitude",
+                      "expression": "`latitude`"
+                    },
+                    {
+                      "name": "longitude",
+                      "expression": "`longitude`"
+                    },
+                    {
+                      "name": "delay_min",
+                      "expression": "`delay_min`"
+                    },
+                    {
+                      "name": "route_short_name",
+                      "expression": "`route_short_name`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "symbol-map",
+              "encodings": {
+                "coordinates": {
+                  "latitude": {
+                    "fieldName": "latitude"
+                  },
+                  "longitude": {
+                    "fieldName": "longitude"
+                  }
+                },
+                "color": {
+                  "fieldName": "delay_min",
+                  "displayName": "Delay (min)",
+                  "scale": {
+                    "type": "quantitative",
+                    "colorRamp": {
+                      "mode": "custom-sequential",
+                      "colors": {
+                        "start": "#00A972",
+                        "end": "#FF3621"
+                      }
+                    }
+                  }
+                },
+                "extra": [
+                  {
+                    "fieldName": "route_short_name",
+                    "displayName": "Route"
+                  }
+                ]
+              },
+              "mark": {
+                "opacity": 0.8
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Live delay map",
+                "showDescription": true,
+                "description": "Latest position of each in-service vehicle, colored by delay at its next stop"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 4,
+            "width": 8,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "table_worst",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_worst",
+                  "fields": [
+                    {
+                      "name": "route",
+                      "expression": "`route`"
+                    },
+                    {
+                      "name": "mode",
+                      "expression": "`mode`"
+                    },
+                    {
+                      "name": "vehicles",
+                      "expression": "`vehicles`"
+                    },
+                    {
+                      "name": "avg_delay_min",
+                      "expression": "`avg_delay_min`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "route",
+                    "displayName": "Route"
+                  },
+                  {
+                    "fieldName": "mode",
+                    "displayName": "Mode"
+                  },
+                  {
+                    "fieldName": "vehicles",
+                    "displayName": "Vehicles"
+                  },
+                  {
+                    "fieldName": "avg_delay_min",
+                    "displayName": "Avg delay (min)"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Worst routes now",
+                "showDescription": true,
+                "description": "Routes with at least 2 vehicles in service"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 4,
+            "width": 4,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "scatter_pva",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_pva",
+                  "fields": [
+                    {
+                      "name": "actual_min",
+                      "expression": "`actual_min`"
+                    },
+                    {
+                      "name": "predicted_min",
+                      "expression": "`predicted_min`"
+                    },
+                    {
+                      "name": "predictor",
+                      "expression": "`predictor`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "scatter",
+              "encodings": {
+                "x": {
+                  "fieldName": "actual_min",
+                  "displayName": "Actual delay (min)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "predicted_min",
+                  "displayName": "Predicted delay (min)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "predictor",
+                  "displayName": "Predictor",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Prediction vs actual",
+                "showDescription": true,
+                "description": "Each point is one prediction whose target stop has been reached (last 2 days, sample of 3,000)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 12,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "line_error",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_mon_daily",
+                  "fields": [
+                    {
+                      "name": "service_date",
+                      "expression": "`service_date`"
+                    },
+                    {
+                      "name": "mae_s",
+                      "expression": "`mae_s`"
+                    },
+                    {
+                      "name": "predictor",
+                      "expression": "`predictor`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "service_date",
+                  "displayName": "Service date",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "mae_s",
+                  "displayName": "MAE (seconds)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "predictor",
+                  "displayName": "Predictor",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Model error over time",
+                "showDescription": true,
+                "description": "Daily mean absolute error once arrivals are observed, all horizons"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 12,
+            "width": 6,
+            "height": 7
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_horizon",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_mon_horizon",
+                  "fields": [
+                    {
+                      "name": "horizon_label",
+                      "expression": "`horizon_label`"
+                    },
+                    {
+                      "name": "mae_s",
+                      "expression": "`mae_s`"
+                    },
+                    {
+                      "name": "predictor",
+                      "expression": "`predictor`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "horizon_label",
+                  "displayName": "Stops ahead",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "mae_s",
+                  "displayName": "MAE (seconds)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "predictor",
+                  "displayName": "Predictor",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "mark": {
+                "layout": "group"
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Error by prediction horizon (last 30 days)"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 19,
+            "width": 12,
+            "height": 6
+          }
+        }
+      ]
+    }
+  ]
+}

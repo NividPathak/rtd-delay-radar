@@ -169,3 +169,67 @@ def test_build_training_set_end_to_end(spark) -> None:
     assert row.stops_remaining == 7
     assert row.alert_active == 0
     assert row.rtd_pred_s == 200  # snapshot at T is at or before t0, so it is usable
+
+
+def test_live_examples_use_latest_stop_and_scheduled_targets(spark) -> None:
+    from pyspark.sql import functions as F
+
+    from src.features.training_set import build_live_examples
+
+    arrivals = spark.createDataFrame(trip_rows("t1", [60, 90, 120]))  # stops 1-3, minutes 0-4
+    # Schedule: stops 1-30, one per 2 minutes from 10:00 Denver (16:00 UTC = 57600 s after
+    # the 06:00 UTC service day start on 2026-10-06).
+    schedule = spark.createDataFrame(
+        [
+            Row(
+                trip_id="t1",
+                stop_sequence=s,
+                scheduled_stop_id=f"s{s}",
+                scheduled_arrival_secs=36000 + 120 * (s - 1),
+            )
+            for s in range(1, 31)
+        ]
+    )
+    alerts = spark.createDataFrame([], ALERT_SCHEMA)
+    updates = spark.createDataFrame(
+        [Row(service_date=DAY, trip_id="t1", stop_sequence=4, feed_ts=T, arrival_delay_s=130)]
+    )
+    now = F.lit(T + timedelta(minutes=5)).cast("timestamp")
+    live = build_live_examples(arrivals, updates, schedule, alerts, now)
+    rows = {r.horizon: r for r in live.collect()}
+    assert set(rows) == {1, 5, 10, 20}
+    assert all(r.anchor_stop_sequence == 3 for r in rows.values())  # latest observed stop
+    assert rows[1].target_stop_sequence == 4
+    assert rows[1].target_stop_id == "s4"
+    assert rows[1].current_delay_s == 120
+    assert rows[1].rtd_pred_s == 130
+    # Anchor scheduled 16:02 UTC (arrival rows); stop 13 scheduled 16:24 UTC (schedule table).
+    assert rows[10].scheduled_gap_s == 1320
+    assert "target_delay_s" not in live.columns  # no labels at scoring time
+
+
+def test_live_examples_skip_stale_trips(spark) -> None:
+    from pyspark.sql import functions as F
+
+    from src.features.training_set import build_live_examples
+
+    arrivals = spark.createDataFrame(trip_rows("t1", [60, 90]))
+    schedule = spark.createDataFrame(
+        [
+            Row(
+                trip_id="t1",
+                stop_sequence=s,
+                scheduled_stop_id=f"s{s}",
+                scheduled_arrival_secs=36000 + 120 * s,
+            )
+            for s in range(1, 30)
+        ]
+    )
+    alerts = spark.createDataFrame([], ALERT_SCHEMA)
+    updates = spark.createDataFrame(
+        [],
+        "service_date date, trip_id string, stop_sequence int, feed_ts timestamp, "
+        "arrival_delay_s long",
+    )
+    two_hours_later = F.lit(T + timedelta(hours=2)).cast("timestamp")
+    assert build_live_examples(arrivals, updates, schedule, alerts, two_hours_later).isEmpty()

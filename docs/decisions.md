@@ -199,3 +199,28 @@ Each feature must be computable at `t0` from data that existed at `t0`. Unit tes
 - **Found in the first training set (dev, one day):** `alert_active` was 1 for about 83% of examples. RTD keeps more than 100 long-running alerts, most of them single-stop closures for construction, so nearly every route always "had an alert". A flag that is almost always on carries little signal.
 - **Choice:** Count only alerts whose informed entity names the route but no specific stop (route-wide: detours, reduced service). A stop-level feature at the target stop could be added later if error analysis shows alerts matter.
 - **Other coverage on the same day:** RTD prediction available for 100% of examples, vehicle ahead about 92%, delay trend about 89%, 7-day history 0% (it needs earlier days).
+
+## 2026-10-06: Scoring before a champion model exists
+
+- **Problem:** M5 needs a batch scoring job that loads the `champion` model, but no model may get that alias before the full retrain (earliest 2026-10-27).
+- **Options:** Wait to build M5, register a preliminary model as champion, or score with the baselines until a champion exists.
+- **Choice:** `rtd-score` always writes persistence and RTD predictions. When `rtd.ml.delay_model@champion` exists, it also writes the model's predictions with the model version. No code change is needed when the champion arrives.
+- **Reason:** Promoting a preliminary model would break the data rules. Baseline predictions let the monitoring table and dashboard run end to end now, and give the comparison line the model will be judged against.
+
+## 2026-10-06: What "live" means here
+
+- Scoring runs after each 2-hour refresh. "Now" is the newest snapshot in silver, not the wall clock, so the dashboard shows the state at the last refresh (up to about 2 hours old). The dashboard header says so.
+- A trip counts as active if its latest observed stop is at most 30 minutes before that snapshot. Its anchor is that latest stop, and targets come from the static schedule (their arrivals have not happened yet).
+- Monitoring joins every past prediction to the observed arrival at its target stop, once that arrival is known, and reports daily MAE and RMSE per predictor, mode, and horizon.
+
+## 2026-10-06: Dashboard defined as code, reading only gold
+
+- **Choice:** `src/dashboards/rtd_delay_radar.lvdash.json`, deployed by the bundle. Dataset SQL uses bare table names, and the bundle sets `dataset_catalog: rtd` and `dataset_schema: ${var.schema_prefix}gold`, so the same file serves dev (`dev_gold`) and prod (`gold`).
+- **Reason:** No UI clicking, and one definition for both targets. Everything the dashboard needs is in gold, so the scoring task also writes `gold.live_vehicles` (latest position and delay per in-service vehicle) for the map.
+- **Format source:** The JSON follows Databricks' published AI/BI dashboard skill reference (`databricks/databricks-agent-skills`) and the `bundle-examples` dashboard. All six dataset queries were run against `rtd.dev_gold` and succeeded. The rendered widgets still need a visual check in the workspace UI.
+
+## 2026-10-08: Merge M1 before its "Done when" is met
+
+- **Conflict:** CLAUDE.md says to merge a milestone after its "Done when" holds. M1's is 48 hours with no gap over 5 minutes. On 2026-10-07 the laptop collector lost about 9 hours in 17 gaps (Mac sleep), so that needs the GitHub Actions backup runner. But GitHub only runs scheduled workflows from the default branch, and `collector.yml` was only on `m1-collector` ("workflow collector.yml not found on the default branch"). The condition could not be met without merging first.
+- **Choice (user approved 2026-10-08):** Merge M1 to `main` once CI passes, with the 48-hour condition stated as open in the pull request. Then merge M2 to M5 in order, each after CI.
+- **Still open:** the 48-hour check, after the backup runner has repo secrets and is confirmed working.

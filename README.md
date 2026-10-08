@@ -4,7 +4,7 @@ Real-time transit delay prediction for Denver RTD on Databricks Free Edition and
 
 A streaming lakehouse that ingests live RTD GTFS-Realtime feeds, builds bronze, silver, and gold Delta tables, and trains a model that predicts stop-level arrival delays.
 
-**Status:** M0 complete. M1 (collector) waiting on 48 hours of continuous data. M2 (bronze, silver) running in prod every 2 hours. M3 (gold labels) running in prod. M4 (features, baselines, models) built; results pending full data (earliest 2026-10-27). The collector has been running since 2026-10-06. See [PROGRESS.md](PROGRESS.md) and [PROJECT_PLAN.md](PROJECT_PLAN.md).
+**Status:** M0 complete. M1 (collector) waiting on 48 hours of continuous data. M2 (bronze, silver) running in prod every 2 hours. M3 (gold labels) running in prod. M4 (features, baselines, models) built; results pending full data (earliest 2026-10-27). M5 (scoring, monitoring, dashboard) running in prod with baseline predictions until a champion model exists. The collector has been running since 2026-10-06. See [PROGRESS.md](PROGRESS.md) and [PROJECT_PLAN.md](PROJECT_PLAN.md).
 
 ## Architecture
 
@@ -24,7 +24,11 @@ RTD GTFS-RT feeds --> collector (laptop + GitHub Actions backup, every 60 s)
              rtd.gold.stop_arrivals, rtd.gold.route_delay_hourly  (observed delay per trip stop)
                           |
                           v
-             model, dashboard  (M4, M5)
+             rtd_train job -> MLflow, rtd.ml.delay_model (M4)
+             score task -> gold.delay_predictions, prediction_monitoring, live_vehicles (M5)
+                          |
+                          v
+             AI/BI dashboard: live delay map, worst routes, prediction vs actual, error over time
 ```
 
 Details and reasoning: [docs/architecture.md](docs/architecture.md). Design choices: [docs/decisions.md](docs/decisions.md).

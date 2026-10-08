@@ -19,6 +19,10 @@ variables:
   schema_prefix:
     description: '"dev_" writes to rtd.dev_bronze/dev_silver/dev_gold; "" writes to prod schemas'
     default: ""
+  warehouse_id:
+    description: SQL warehouse that runs the dashboard queries
+    lookup:
+      warehouse: "Serverless Starter Warehouse"
   dev_date:
     description: Only ingest this UTC date (YYYY-MM-DD). Empty means all new files.
     default: ""
