@@ -3,6 +3,7 @@
 import io
 
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.config import Config
 
 from src.common import config
 
@@ -23,10 +24,11 @@ class VolumeUploader:
     @property
     def client(self) -> WorkspaceClient:
         if self._client is None:
-            self._client = WorkspaceClient(
+            timeouts = Config(
                 http_timeout_seconds=config.UPLOAD_TIMEOUT_SECONDS,
                 retry_timeout_seconds=config.UPLOAD_TIMEOUT_SECONDS,
             )
+            self._client = WorkspaceClient(config=timeouts)
         return self._client
 
     def upload(self, relative_path: str, body: bytes) -> str:
