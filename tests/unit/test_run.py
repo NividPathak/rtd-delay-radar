@@ -50,7 +50,7 @@ def test_failed_upload_is_retried_next_cycle(tmp_path: Path) -> None:
 
     def flaky_upload(path: str, body: bytes) -> None:
         calls.append(path)
-        if len(calls) <= 2:
+        if len(calls) == 1:
             raise OSError("volume unavailable")
 
     poll_once(state, tmp_path, flaky_upload, FEEDS, fake_fetch)
@@ -58,7 +58,7 @@ def test_failed_upload_is_retried_next_cycle(tmp_path: Path) -> None:
 
     poll_once(state, tmp_path, flaky_upload, FEEDS, fake_fetch)
     assert state.pending_uploads == []
-    assert len(calls) == 4
+    assert len(calls) == 3  # one failure, then the second snapshot was queued, not tried
 
 
 def test_run_loop_stops_after_max_minutes(tmp_path: Path) -> None:
@@ -77,3 +77,31 @@ def test_run_loop_stops_after_max_minutes(tmp_path: Path) -> None:
         sleep=fake_sleep,
     )
     assert cycles == 5
+
+
+def test_failed_upload_stops_further_uploads_in_the_cycle(tmp_path: Path) -> None:
+    state = CollectorState(pending_uploads=[f"old_{i}.pb" for i in range(5)])
+    calls: list[str] = []
+
+    def broken_upload(path: str, body: bytes) -> None:
+        calls.append(path)
+        raise OSError("refresh token is invalid")
+
+    for i in range(5):
+        (tmp_path / f"old_{i}.pb").write_bytes(b"x")
+    poll_once(state, tmp_path, broken_upload, FEEDS, fake_fetch)
+    assert len(calls) == 1  # one timeout per cycle, polling is never starved
+    assert len(saved_files(tmp_path)) == 5 + 2  # new snapshots are still saved
+    assert len(state.pending_uploads) == 5 + 2
+
+
+def test_retry_backlog_drains_in_bounded_batches(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("src.common.config.UPLOAD_RETRIES_PER_CYCLE", 3)
+    names = [f"old_{i}.pb" for i in range(5)]
+    for name in names:
+        (tmp_path / name).write_bytes(b"x")
+    state = CollectorState(pending_uploads=list(names))
+    uploaded: list[str] = []
+    poll_once(state, tmp_path, lambda p, b: uploaded.append(p), {}, fake_fetch)
+    assert uploaded == names[:3]
+    assert state.pending_uploads == names[3:]

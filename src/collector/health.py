@@ -8,7 +8,7 @@ Usage:
 import argparse
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from databricks.sdk import WorkspaceClient
@@ -63,19 +63,25 @@ def local_file_names(local_root: Path, feed: str) -> list[str]:
     return [f.name for f in (local_root / f"feed={feed}").rglob("*.pb")]
 
 
+def volume_names_for_date(client: WorkspaceClient, feed: str, day: date) -> list[str]:
+    """List snapshot file names in the volume for one feed and UTC date."""
+    date_dir = f"{config.RAW_VOLUME_PATH}/feed={feed}/date={day:%Y-%m-%d}"
+    try:
+        hour_dirs = [e.path for e in client.files.list_directory_contents(date_dir)]
+    except Exception:  # the date folder does not exist yet
+        return []
+    names: list[str] = []
+    for hour_dir in hour_dirs:
+        names += [e.name for e in client.files.list_directory_contents(hour_dir)]
+    return names
+
+
 def volume_file_names(client: WorkspaceClient, feed: str, days: int) -> list[str]:
     """List snapshot file names in the volume for one feed over the last `days` UTC dates."""
     today = datetime.now(tz=UTC).date()
     names: list[str] = []
     for offset in range(days - 1, -1, -1):
-        day = today - timedelta(days=offset)
-        date_dir = f"{config.RAW_VOLUME_PATH}/feed={feed}/date={day:%Y-%m-%d}"
-        try:
-            hour_dirs = [e.path for e in client.files.list_directory_contents(date_dir)]
-        except Exception:  # the date folder does not exist yet
-            continue
-        for hour_dir in hour_dirs:
-            names += [e.name for e in client.files.list_directory_contents(hour_dir)]
+        names += volume_names_for_date(client, feed, today - timedelta(days=offset))
     return names
 
 

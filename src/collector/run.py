@@ -9,6 +9,7 @@ Usage:
 
 import argparse
 import logging
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ class CollectorState:
 
     last_seen: dict[str, int] = field(default_factory=dict)
     pending_uploads: list[str] = field(default_factory=list)
+    upload_down: bool = False  # set after a failed upload, cleared at the next cycle
 
 
 def poll_feed(
@@ -60,23 +62,31 @@ def poll_feed(
 def try_upload(
     relative_path: str, local_root: Path, state: CollectorState, upload: Uploader
 ) -> bool:
-    """Upload one saved snapshot. On failure, queue it for the next cycle."""
-    try:
-        upload(relative_path, (local_root / relative_path).read_bytes())
-        return True
-    except Exception as error:
-        logger.error("upload failed, queued for retry: %s (%s)", relative_path, error)
-        if relative_path not in state.pending_uploads:
-            state.pending_uploads.append(relative_path)
-        return False
+    """Upload one saved snapshot. On failure, queue it for the next cycle.
+
+    After one failure the volume is treated as down for the rest of the cycle, so a
+    broken upload costs at most one timeout per minute and never starves polling.
+    """
+    if not state.upload_down:
+        try:
+            upload(relative_path, (local_root / relative_path).read_bytes())
+            return True
+        except Exception as error:
+            state.upload_down = True
+            logger.error("upload failed, volume treated as down this cycle: %s", error)
+    if relative_path not in state.pending_uploads:
+        state.pending_uploads.append(relative_path)
+    return False
 
 
 def retry_pending(state: CollectorState, local_root: Path, upload: Uploader) -> None:
-    """Retry uploads that failed in earlier cycles."""
-    waiting = list(state.pending_uploads)
-    state.pending_uploads.clear()
-    for relative_path in waiting:
+    """Retry the oldest uploads that failed in earlier cycles, a bounded batch per cycle."""
+    batch = state.pending_uploads[: config.UPLOAD_RETRIES_PER_CYCLE]
+    del state.pending_uploads[: config.UPLOAD_RETRIES_PER_CYCLE]
+    for relative_path in batch:
         try_upload(relative_path, local_root, state, upload)
+    if state.pending_uploads or state.upload_down:
+        logger.warning("%d uploads waiting for retry", len(state.pending_uploads))
 
 
 def poll_once(
@@ -87,6 +97,7 @@ def poll_once(
     fetch: Callable[[str], bytes] = fetch_with_retries,
 ) -> None:
     """Run one cycle over all feeds. An error in one feed never stops the others."""
+    state.upload_down = False
     if upload is not None:
         retry_pending(state, local_root, upload)
     for name, url in feeds.items():
@@ -141,6 +152,10 @@ def main() -> None:
         poll_once(state, local_root, upload)
     else:
         run_loop(state, local_root, upload, max_minutes=args.minutes)
+    if state.pending_uploads:
+        # A failing exit makes a GitHub Actions run red, which emails the repo owner.
+        logger.error("%d snapshots were never uploaded", len(state.pending_uploads))
+        sys.exit(1)
 
 
 if __name__ == "__main__":
