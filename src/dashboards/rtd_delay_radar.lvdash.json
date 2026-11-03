@@ -54,7 +54,8 @@
       "name": "ds_mon_daily",
       "displayName": "Error over time",
       "queryLines": [
-        "SELECT service_date, predictor, round(sum(mae_s * n) / sum(n), 1) AS mae_s\n",
+        "SELECT date_format(service_date, 'yyyy-MM-dd') AS service_day, predictor,\n",
+        "       round(sum(mae_s * n) / sum(n), 1) AS mae_s\n",
         "FROM prediction_monitoring\n",
         "GROUP BY service_date, predictor\n",
         "ORDER BY service_date\n"
@@ -64,7 +65,9 @@
       "name": "ds_mon_horizon",
       "displayName": "Error by horizon",
       "queryLines": [
-        "SELECT predictor, concat(CAST(horizon AS STRING), ' stops') AS horizon_label, horizon,\n",
+        "SELECT predictor,\n",
+        "       CASE WHEN horizon = 1 THEN '1 stop' ELSE concat(CAST(horizon AS STRING), ' stops') END AS horizon_label,\n",
+        "       horizon,\n",
         "       round(sum(mae_s * n) / sum(n), 1) AS mae_s\n",
         "FROM prediction_monitoring\n",
         "GROUP BY predictor, horizon\n",
@@ -86,7 +89,7 @@
               "lines": [
                 "## RTD Delay Radar\n",
                 "\n",
-                "Live Denver RTD bus and rail delays. Data refreshes in scheduled bursts every 2 hours (Databricks Free Edition, `availableNow` streaming), so \"now\" means the latest refresh. Model predictions appear after the first full-data retrain (earliest 2026-10-27); until then only the persistence and RTD baselines are shown."
+                "Live Denver RTD bus and rail delays. Data refreshes in scheduled bursts every 2 hours (Databricks Free Edition, `availableNow` streaming), so \"now\" means the latest refresh. Model predictions appear after the first full-data retrain (earliest 2026-11-17); until then only the persistence and RTD baselines are shown."
               ]
             }
           },
@@ -334,7 +337,7 @@
           "position": {
             "x": 0,
             "y": 4,
-            "width": 8,
+            "width": 7,
             "height": 8
           }
         },
@@ -387,7 +390,7 @@
                   },
                   {
                     "fieldName": "avg_delay_min",
-                    "displayName": "Avg delay (min)"
+                    "displayName": "Avg min late"
                   }
                 ]
               },
@@ -400,9 +403,9 @@
             }
           },
           "position": {
-            "x": 8,
+            "x": 7,
             "y": 4,
-            "width": 4,
+            "width": 5,
             "height": 8
           }
         },
@@ -483,8 +486,8 @@
                   "datasetName": "ds_mon_daily",
                   "fields": [
                     {
-                      "name": "service_date",
-                      "expression": "`service_date`"
+                      "name": "service_day",
+                      "expression": "`service_day`"
                     },
                     {
                       "name": "mae_s",
@@ -504,10 +507,13 @@
               "widgetType": "line",
               "encodings": {
                 "x": {
-                  "fieldName": "service_date",
+                  "fieldName": "service_day",
                   "displayName": "Service date",
                   "scale": {
-                    "type": "temporal"
+                    "type": "categorical",
+                    "sort": {
+                      "by": "natural-order"
+                    }
                   }
                 },
                 "y": {
@@ -574,7 +580,16 @@
                   "fieldName": "horizon_label",
                   "displayName": "Stops ahead",
                   "scale": {
-                    "type": "categorical"
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "1 stop",
+                        "5 stops",
+                        "10 stops",
+                        "20 stops"
+                      ]
+                    }
                   }
                 },
                 "y": {

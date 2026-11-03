@@ -208,3 +208,22 @@ gold.delay_predictions         gold.prediction_monitoring   gold.live_vehicles
 - **Same feature code for training and scoring.** `src/features/training_set.py` builds features for both. The only difference is where the target comes from: an observed arrival for training, the static schedule for live scoring. Sharing the code means the model sees features computed the same way in both places (no training/serving skew).
 - **Baselines are scored too.** Monitoring compares the model with persistence and RTD on the same predictions every day. That is the honest way to show whether the model keeps its advantage after deployment.
 - **The dashboard updates by itself.** Its queries read gold tables, which every scheduled run refreshes. Opening the dashboard runs those queries on the SQL warehouse.
+
+## M6. CI/CD and write-up
+
+### What exists now
+
+```
+pull request ──> ci.yml:     ruff, pytest (local Spark), bundle validate -t prod
+push to main ──> deploy.yml: ruff, pytest, bundle validate, bundle deploy -t prod
+every 15 min ──> collector.yml: backup collector when the volume goes stale
+```
+
+- Every milestone was merged through a pull request after CI passed (PRs #1 to #6).
+- `README.md` explains the project, architecture, findings, limitations, and setup. `docs/results.md` keeps model results marked "pending full data" until the 3-week retrain.
+
+### Why it is built this way
+
+- **Deploy from `main` only.** Prod always matches `main`, and nothing reaches prod without passing lint and tests first. Before this, prod was deployed from a laptop, which is fine for building but not for keeping prod reproducible.
+- **Secrets stay in GitHub.** The Databricks host and token are repository secrets, never in files. Every Databricks step skips cleanly when they are missing, so forks and early runs do not fail.
+- **Tests run without Databricks.** The CI unit tests run on a local Spark session with real RTD snapshots, so every pull request is checked without spending any Databricks quota.
