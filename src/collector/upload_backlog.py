@@ -7,6 +7,11 @@ They are real snapshots collected at the time, not reconstructed data.
 Usage:
     python -m src.collector.upload_backlog --start 2026-10-13 --end 2026-10-28
     python -m src.collector.upload_backlog --start 2026-10-13 --end 2026-10-28 --dry-run
+    python -m src.collector.upload_backlog --start 2026-10-13 --end 2026-10-28 --skip-check
+
+--skip-check uploads every local snapshot without listing the volume first. Listing very
+busy hour folders can time out. Re-uploading a file that is already there writes the
+same bytes to the same path, and Auto Loader skips paths it has already ingested.
 """
 
 import argparse
@@ -41,6 +46,7 @@ def main() -> None:
     parser.add_argument("--start", type=date.fromisoformat, required=True, help="UTC date")
     parser.add_argument("--end", type=date.fromisoformat, required=True, help="UTC date")
     parser.add_argument("--dry-run", action="store_true", help="count only, upload nothing")
+    parser.add_argument("--skip-check", action="store_true", help="upload all, do not list")
     args = parser.parse_args()
 
     local_root = Path(config.LOCAL_RAW_DIR)
@@ -50,7 +56,8 @@ def main() -> None:
     for day in dates_between(args.start, args.end):
         for feed in config.FEEDS:
             local = local_snapshots_for_date(local_root, feed, day)
-            missing = missing_from_volume(local, volume_names_for_date(lister, feed, day))
+            on_volume = [] if args.skip_check else volume_names_for_date(lister, feed, day)
+            missing = missing_from_volume(local, on_volume)
             print(f"{day} {feed}: {len(local)} local, {len(missing)} missing", flush=True)
             total += len(missing)
             if args.dry_run:
