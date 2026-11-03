@@ -85,7 +85,7 @@ Persistence: the delay stays what it is now. It is simple and strong. RTD's own 
 So that a model that learns nothing collapses to persistence instead of something worse. It also makes the target smaller and better behaved, which helps the linear model.
 
 **5. You only had one day of data when you built this. What did you do?**
-I built and tested the whole pipeline but did not report any number. The code marks runs with under 21 days or no full held-out week as preliminary, tags them in MLflow, and never gives them the champion alias. The first real results come from the retrain on 2026-10-27.
+I built and tested the whole pipeline but did not report any number. The code marks runs with under 21 days or no full held-out week as preliminary, tags them in MLflow, and never gives them the champion alias. The first real results come from the full retrain, moved to 2026-11-17 after a collector outage.
 
 ## M5. Scoring and dashboard
 

@@ -2,14 +2,14 @@
 
 **Status: pending full data.**
 
-The collector started on 2026-10-06. The plan needs at least 3 weeks of history and a full held-out week before any number is reported. The earliest full retrain is **2026-10-27**, and only if collection gaps are small by then (see PROGRESS.md for the gap log).
+The collector started on 2026-10-06. The plan needs at least 3 weeks of history and a full held-out week before any number is reported. The earliest full retrain was 2026-10-27, but a collector outage from 2026-10-13 to 2026-11-02 lost most of that period (see the README and `docs/decisions.md`). The new earliest date is **2026-11-17**: the mostly complete first week plus two weeks collected after the fix, with the last week held out.
 
 Runs before that date are pipeline tests. They are tagged `data_status=preliminary` in MLflow and in `gold.model_results`, and they are not reported here or in the README.
 
 ## How results will be produced
 
 ```bash
-databricks bundle run -t prod rtd_train --params start=2026-10-06,end=2026-10-27
+databricks bundle run -t prod rtd_train --params start=2026-10-06,end=2026-11-17
 ```
 
 This builds `gold.training_set`, splits by service date (last 7 days held out), computes both baselines on the held-out week, trains the linear model and two GBT models, logs everything to MLflow, and appends one row per predictor, mode, and horizon to `gold.model_results`.

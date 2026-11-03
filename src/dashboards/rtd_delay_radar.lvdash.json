@@ -89,7 +89,7 @@
               "lines": [
                 "## RTD Delay Radar\n",
                 "\n",
-                "Live Denver RTD bus and rail delays. Data refreshes in scheduled bursts every 2 hours (Databricks Free Edition, `availableNow` streaming), so \"now\" means the latest refresh. Model predictions appear after the first full-data retrain (earliest 2026-10-27); until then only the persistence and RTD baselines are shown."
+                "Live Denver RTD bus and rail delays. Data refreshes in scheduled bursts every 2 hours (Databricks Free Edition, `availableNow` streaming), so \"now\" means the latest refresh. Model predictions appear after the first full-data retrain (earliest 2026-11-17); until then only the persistence and RTD baselines are shown."
               ]
             }
           },

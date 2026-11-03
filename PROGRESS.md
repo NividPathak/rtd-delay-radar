@@ -11,7 +11,7 @@ M6 remaining:
 - [ ] GitHub secrets (user) so the backup collector and deploy workflow run.
 - [ ] Dashboard screenshots and a demo GIF (needs Chrome signed in to the workspace).
 - [ ] Pin the repo on the GitHub profile (user).
-- [ ] Final results after the 2026-10-27 retrain.
+- [ ] Final results after the 2026-11-17 retrain.
 
 Previous:
 
@@ -33,11 +33,11 @@ M1, collector (branch `m1-collector`). Code complete. Waiting on: GitHub secrets
 
 ## Key dates
 
-- **Full retrain command (run on or after 2026-10-27):**
-  `databricks bundle run -t prod rtd_train --params start=2026-10-06,end=2026-10-27`
+- **Full retrain command (run on or after 2026-11-17):**
+  `databricks bundle run -t prod rtd_train --params start=2026-10-06,end=2026-11-17`
 
 - **Collector started:** 2026-10-06 08:57 UTC (02:57 Denver).
-- **Earliest full retrain:** 2026-10-27 (collector start + 21 days), only if collection has no long gaps. Any model before then is a pipeline test tagged `data_status=preliminary`.
+- **Earliest full retrain:** 2026-11-17 (was 2026-10-27; moved after the October outage), only if collection has no long gaps. Any model before then is a pipeline test tagged `data_status=preliminary`.
 - **M1 "Done when" check:** 48 hours of continuous data, earliest 2026-10-08 09:00 UTC.
 
 ## Collector health (last check)
@@ -84,7 +84,7 @@ Earlier:
 - [x] Prod deployed (rtd_refresh now has bronze, silver, score).
 - [ ] Visual check of the dashboard (needs the user signed in to the workspace in the browser).
 - [ ] Confirm a scheduled prod run refreshes the dashboard tables on its own.
-- [ ] Model predictions on the dashboard (after the champion exists, 2026-10-27 earliest).
+- [ ] Model predictions on the dashboard (after the champion exists, 2026-11-17 earliest).
 
 ## M4 checklist
 
@@ -95,7 +95,7 @@ Earlier:
 - [x] `rtd_train` job (features then train), one command with a date range.
 - [x] `notebooks/error_analysis.py` and `gold.test_predictions`.
 - [x] Pipeline test in dev (2026-10-06 only): baselines logged as preliminary, models skipped (no training days). Feature coverage checked; `alert_active` narrowed to route-wide alerts.
-- [ ] Full retrain on 3 weeks with a held-out week (2026-10-27 earliest).
+- [ ] Full retrain on 3 weeks with a held-out week (2026-11-17 earliest).
 - [ ] Champion alias only after that run.
 
 ## M3 checklist
@@ -177,3 +177,10 @@ Earlier:
 - Merged M1 to M5 (PRs #2 to #6) after CI. Deleted the feature branches.
 - Added deploy and bundle-validate workflows, rewrote the README, added findings to `docs/results.md`, M6 docs.
 - Open: GitHub secrets, dashboard screenshots/GIF, pinning the repo, 48-hour gap-free check, full retrain 2026-10-27.
+
+### 2026-11-02: collector outage found and fixed
+- Found at session start: the Databricks CLI login expired on 2026-10-13. Upload retries starved polling (10 to 140 snapshots a day), and from 2026-10-28 23:52 UTC the collector crashed at startup. Nothing collected until 2026-11-02 19:53 UTC. Prod `rtd_refresh` also had no runs from 2026-10-12 to 2026-11-02 (schedule unpaused; cause unknown, resumed after the user logged in).
+- Fixed (PR #7): uploads never block polling, bounded retry batches, lazy login with timeouts, red backup runs on upload failure, `upload_backlog` for local snapshots. Reinstalled the launchd agent. User logged in again; uploads resumed.
+- Uploading the local Oct 13 to Nov 2 snapshots with `upload_backlog --skip-check` (listing busy hour folders timed out twice).
+- Earliest full retrain moved to 2026-11-17.
+- Open: PR #7 and the M6 PR need the user's merge approval. Personal access token profile `rtd-collector` and GitHub secrets (user). Daytime dashboard screenshots and GIF. Pin the repo.

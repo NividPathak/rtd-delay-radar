@@ -11,12 +11,12 @@ Everything is deployed as code with Databricks Asset Bundles and GitHub Actions,
 | Milestone | State |
 |---|---|
 | M0 Setup and spikes | Done |
-| M1 Collector | Running since 2026-10-06. Uptime so far 72.8% (see [Data collection](#data-collection)) |
+| M1 Collector | Running since 2026-10-06, with a 3-week outage in October that is documented below |
 | M2 Bronze and silver | Running in prod every 2 hours |
 | M3 Gold tables and labels | Running in prod |
-| M4 Features and model | Built and pipeline-tested. **Results pending full data** (earliest 2026-10-27) |
+| M4 Features and model | Built and pipeline-tested. **Results pending full data** (earliest 2026-11-17) |
 | M5 Scoring and dashboard | Running in prod with baseline predictions until a model is approved |
-| M6 CI/CD and write-up | In progress |
+| M6 CI/CD and write-up | CI/CD and write-up done; results, screenshots, and demo follow the retrain |
 
 ## Architecture
 
@@ -48,10 +48,10 @@ Details: [architecture](docs/architecture.md), [design decisions](docs/decisions
 
 ## Results
 
-**Pending full data.** The plan needs at least 3 weeks of history with a full held-out week. Any model trained before then is a pipeline test, tagged `data_status=preliminary`, and not reported. The first full retrain is planned for 2026-10-27:
+**Pending full data.** The plan needs at least 3 weeks of history with a full held-out week. Any model trained before then is a pipeline test, tagged `data_status=preliminary`, and not reported. The first full retrain is planned for 2026-11-17, after the collection outage described below:
 
 ```bash
-databricks bundle run -t prod rtd_train --params start=2026-10-06,end=2026-10-27
+databricks bundle run -t prod rtd_train --params start=2026-10-06,end=2026-11-17
 ```
 
 Results will report MAE and RMSE in seconds for persistence, RTD's prediction, linear regression, and gradient-boosted trees, split by bus vs rail and by horizon (1, 5, 10, 20 stops ahead), including where the model loses.
@@ -68,9 +68,16 @@ Results will report MAE and RMSE in seconds for persistence, RTD's prediction, l
 
 RTD feeds only show the present, so history exists only while the collector runs. Gaps are measured, not hidden or filled.
 
-- 2026-10-06 08:57 to 2026-10-08 06:00 UTC: 45 hours, 21 gaps longer than 5 minutes, 12.2 hours missing (uptime 72.8%).
-- Cause: the laptop collector stops when the Mac sleeps with the lid closed. The GitHub Actions backup runner covers this once its repository secrets are configured.
-- Gap log: [PROGRESS.md](PROGRESS.md). Check any time with `uv run python -m src.collector.health --volume`.
+| Period (UTC) | Coverage | Cause |
+|---|---|---|
+| 2026-10-06 to 2026-10-13 | Mostly continuous, 270 to 1,200 snapshots a day (a full day is 1,440) | Gaps while the laptop slept |
+| 2026-10-13 to 2026-10-28 | 10 to 140 snapshots a day, too sparse for labels | The Databricks login expired. Failed uploads were retried every minute and starved polling |
+| 2026-10-28 to 2026-11-02 | None | A restart crashed on the expired login |
+| 2026-11-02 onward | Collecting again | Collector fixed |
+
+- **What changed:** uploads can no longer block polling. One failed upload pauses uploads for the rest of that minute, and the backlog drains in small batches. The collector logs in on first upload, not at startup. A backup run that cannot upload fails visibly. Details in [decisions](docs/decisions.md).
+- **Not filled in:** RTD feeds only show the present, so missing days are gone. Nothing is simulated or reconstructed. The sparse October snapshots were uploaded as collected. They yield few trusted labels, since a label needs a prediction made at most 2 minutes before arrival.
+- Check coverage any time with `uv run python -m src.collector.health --volume`.
 
 ## Limitations
 
@@ -99,6 +106,7 @@ Collector:
 ```bash
 sh ops/install_collector_agent.sh                # laptop: launchd keeps it running and awake
 uv run python -m src.collector.health --volume   # date range and gaps over 5 minutes
+uv run python -m src.collector.upload_backlog --start <date> --end <date>   # upload snapshots saved locally but missing from the volume
 ```
 
 CI/CD (`.github/workflows/`): `ci.yml` runs lint, unit tests, and bundle validation on pull requests; `deploy.yml` deploys the prod target on every push to `main`; `collector.yml` is the backup collector. The Databricks steps need repository secrets `DATABRICKS_HOST` and `DATABRICKS_TOKEN`.
