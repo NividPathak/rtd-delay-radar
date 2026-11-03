@@ -181,6 +181,8 @@ Earlier:
 ### 2026-11-02: collector outage found and fixed
 - Found at session start: the Databricks CLI login expired on 2026-10-13. Upload retries starved polling (10 to 140 snapshots a day), and from 2026-10-28 23:52 UTC the collector crashed at startup. Nothing collected until 2026-11-02 19:53 UTC. Prod `rtd_refresh` also had no runs from 2026-10-12 to 2026-11-02 (schedule unpaused; cause unknown, resumed after the user logged in).
 - Fixed (PR #7): uploads never block polling, bounded retry batches, lazy login with timeouts, red backup runs on upload failure, `upload_backlog` for local snapshots. Reinstalled the launchd agent. User logged in again; uploads resumed.
-- Uploading the local Oct 13 to Nov 2 snapshots with `upload_backlog --skip-check` (listing busy hour folders timed out twice).
+- Uploaded the local Oct 13 to Oct 21 snapshots with `upload_backlog --skip-check` (listing busy hour folders timed out twice). Oct 22 to Nov 2 timed out twice at Oct 22 vehicle_positions while the Mac was going to sleep; those files are still on disk. Rerun when awake: `uv run python -m src.collector.upload_backlog --start 2026-10-22 --end 2026-11-02 --skip-check`.
 - Earliest full retrain moved to 2026-11-17.
-- Open: PR #7 and the M6 PR need the user's merge approval. Personal access token profile `rtd-collector` and GitHub secrets (user). Daytime dashboard screenshots and GIF. Pin the repo.
+- Merged PR #7 (collector fix) and PR #8 (M6) after CI. Prod deployed locally (deploy.yml skips without secrets).
+- From 22:33 MST the Mac slept between short wake-ups, so collection is gapped overnight again until the backup runner has secrets.
+- Open: Personal access token profile `rtd-collector` and GitHub secrets (user). Daytime dashboard screenshots and GIF. Pin the repo.
