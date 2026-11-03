@@ -20,6 +20,8 @@ POLL_INTERVAL_SECONDS = 60
 HTTP_TIMEOUT_SECONDS = 20
 MAX_RETRIES = 3
 BACKOFF_BASE_SECONDS = 2.0
+UPLOAD_TIMEOUT_SECONDS = 60
+UPLOAD_RETRIES_PER_CYCLE = 30  # backlog drains at ~30 files/min, well above 3 new files/min
 LOCAL_RAW_DIR = "data/raw"
 USER_AGENT = "rtd-delay-radar/0.1 (+https://github.com/NividPathak/rtd-delay-radar)"
 
