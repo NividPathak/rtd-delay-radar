@@ -20,6 +20,9 @@
         <!-- The Databricks SDK calls the `databricks` CLI for OAuth tokens. -->
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <!-- Which ~/.databrickscfg profile to upload with. -->
+        <key>DATABRICKS_CONFIG_PROFILE</key>
+        <string>__PROFILE__</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
