@@ -13,6 +13,8 @@ import argparse
 from datetime import date, timedelta
 from pathlib import Path
 
+from databricks.sdk import WorkspaceClient
+
 from src.collector.health import volume_names_for_date
 from src.collector.uploader import VolumeUploader
 from src.common import config
@@ -43,12 +45,13 @@ def main() -> None:
 
     local_root = Path(config.LOCAL_RAW_DIR)
     uploader = VolumeUploader()
+    lister = WorkspaceClient()  # default timeouts: listing a busy day takes longer than an upload
     total = 0
     for day in dates_between(args.start, args.end):
         for feed in config.FEEDS:
             local = local_snapshots_for_date(local_root, feed, day)
-            missing = missing_from_volume(local, volume_names_for_date(uploader.client, feed, day))
-            print(f"{day} {feed}: {len(local)} local, {len(missing)} missing from the volume")
+            missing = missing_from_volume(local, volume_names_for_date(lister, feed, day))
+            print(f"{day} {feed}: {len(local)} local, {len(missing)} missing", flush=True)
             total += len(missing)
             if args.dry_run:
                 continue
